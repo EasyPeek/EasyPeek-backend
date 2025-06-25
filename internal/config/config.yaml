@@ -1,0 +1,15 @@
+database:
+  host: localhost
+  port: 5432
+  user: postgres
+  password: PostgresPassword
+  db_name: easypeekdb
+  ssl_mode: disable
+  max_idle_conns: 10
+  max_open_conns: 10
+
+redis:
+  address: localhost:6379
+  password: ""
+  database: 0
+
