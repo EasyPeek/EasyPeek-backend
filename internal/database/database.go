@@ -79,31 +79,27 @@ func GetDB() *gorm.DB {
 	return DB
 }
 
-// Migrate
+// Migrate execute database migration
+func Migrate(models ...interface{}) error {
+	if DB == nil {
+		return fmt.Errorf("database not initialized")
+	}
 
-// Transaction
+	for _, model := range models {
+		if err := DB.AutoMigrate(model); err != nil {
+			return fmt.Errorf("failed to migrate model %T: %w", model, err)
+		}
+	}
 
-// // Migrate execute database migration
-// func Migrate(models ...interface{}) error {
-// 	if DB == nil {
-// 		return fmt.Errorf("database not initialized")
-// 	}
+	log.Printf("database migration completed, %d models migrated", len(models))
+	return nil
+}
 
-// 	for _, model := range models {
-// 		if err := DB.AutoMigrate(model); err != nil {
-// 			return fmt.Errorf("failed to migrate model %T: %w", model, err)
-// 		}
-// 	}
+// Transaction execute transaction
+func Transaction(fn func(*gorm.DB) error) error {
+	if DB == nil {
+		return fmt.Errorf("database not initialized")
+	}
 
-// 	log.Printf("database migration completed, %d models migrated", len(models))
-// 	return nil
-// }
-
-// // Transaction execute transaction
-// func Transaction(fn func(*gorm.DB) error) error {
-// 	if DB == nil {
-// 		return fmt.Errorf("database not initialized")
-// 	}
-
-// 	return DB.Transaction(fn)
-// }
+	return DB.Transaction(fn)
+}
