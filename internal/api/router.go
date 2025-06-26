@@ -47,9 +47,13 @@ func SetupRoutes() *gin.Engine {
 		// event routes
 		events := v1.Group("/events")
 		{
+			// 公开路由
 			events.GET("", eventHandler.GetEvents)
+			events.GET("/hot", eventHandler.GetHotEvents)
+			events.GET("/categories", eventHandler.GetEventCategories)
 			events.GET("/:id", eventHandler.GetEvent)
 			events.GET("/status/:status", eventHandler.GetEventsByStatus)
+			events.POST("/:id/view", eventHandler.IncrementViewCount)
 
 			// 需要身份验证的路由
 			authEvents := events.Group("")

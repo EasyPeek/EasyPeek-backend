@@ -25,7 +25,7 @@ func main() {
 	defer database.CloseDatabase()
 
 	// execute database migration
-	if err := database.Migrate(&models.User{}); err != nil {
+	if err := database.Migrate(&models.User{}, &models.Event{}); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 

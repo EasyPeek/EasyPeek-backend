@@ -22,13 +22,15 @@ func NewEventHandler() *EventHandler {
 
 // GetEvents 获取事件列表
 // @Summary 获取事件列表
-// @Description 获取事件列表，支持分页、状态筛选和搜索
+// @Description 获取事件列表，支持分页、状态筛选、分类筛选、搜索和排序
 // @Tags events
 // @Produce json
 // @Param status query string false "事件状态" Enums(进行中, 已结束)
+// @Param category query string false "事件分类"
+// @Param search query string false "搜索关键词"
+// @Param sort_by query string false "排序方式" Enums(time, hotness, views)
 // @Param page query int false "页码" default(1)
 // @Param limit query int false "每页数量" default(10)
-// @Param search query string false "搜索关键词"
 // @Success 200 {object} utils.Response{data=models.EventListResponse}
 // @Failure 400 {object} utils.Response
 // @Failure 500 {object} utils.Response
@@ -219,4 +221,76 @@ func (h *EventHandler) GetEventsByStatus(c *gin.Context) {
 	}
 
 	utils.Success(c, events)
+}
+
+// GetHotEvents 获取热点事件列表
+// @Summary 获取热点事件列表
+// @Description 获取当前热点事件，按热度排序
+// @Tags events
+// @Produce json
+// @Param limit query int false "限制数量" default(10)
+// @Success 200 {object} utils.Response{data=[]models.EventResponse}
+// @Failure 400 {object} utils.Response
+// @Failure 500 {object} utils.Response
+// @Router /api/v1/events/hot [get]
+func (h *EventHandler) GetHotEvents(c *gin.Context) {
+	limitStr := c.DefaultQuery("limit", "10")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 10
+	}
+
+	events, err := h.eventService.GetHotEvents(limit)
+	if err != nil {
+		utils.InternalServerError(c, "Failed to get hot events")
+		return
+	}
+
+	utils.Success(c, events)
+}
+
+// GetEventCategories 获取事件分类列表
+// @Summary 获取事件分类列表
+// @Description 获取所有可用的事件分类
+// @Tags events
+// @Produce json
+// @Success 200 {object} utils.Response{data=[]string}
+// @Failure 500 {object} utils.Response
+// @Router /api/v1/events/categories [get]
+func (h *EventHandler) GetEventCategories(c *gin.Context) {
+	categories, err := h.eventService.GetEventCategories()
+	if err != nil {
+		utils.InternalServerError(c, "Failed to get categories")
+		return
+	}
+
+	utils.Success(c, categories)
+}
+
+// IncrementViewCount 增加事件浏览次数
+// @Summary 增加事件浏览次数
+// @Description 记录事件被查看，增加浏览次数
+// @Tags events
+// @Produce json
+// @Param id path int true "事件ID"
+// @Success 200 {object} utils.Response
+// @Failure 400 {object} utils.Response
+// @Failure 404 {object} utils.Response
+// @Failure 500 {object} utils.Response
+// @Router /api/v1/events/{id}/view [post]
+func (h *EventHandler) IncrementViewCount(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "Invalid event ID")
+		return
+	}
+
+	err = h.eventService.IncrementViewCount(uint(id))
+	if err != nil {
+		utils.InternalServerError(c, "Failed to increment view count")
+		return
+	}
+
+	utils.Success(c, gin.H{"message": "View count incremented"})
 }
