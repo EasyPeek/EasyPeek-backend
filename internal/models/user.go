@@ -79,6 +79,7 @@ func (u *User) ToResponse() UserResponse {
 		Role:      u.Role,
 		Status:    u.Status,
 		CreatedAt: u.CreatedAt,
+		UpdatedAt: u.UpdatedAt,
 	}
 }
 
