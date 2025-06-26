@@ -13,3 +13,13 @@ redis:
   password: ""
   database: 0
 
+jwt:
+  secret_key: "your-secret-key-here-change-in-production"
+  expire_hours: 24
+
+cors:
+  allow_origins:
+    - "http://localhost:3000"
+    - "http://localhost:8080"
+    - "*"
+
