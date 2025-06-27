@@ -294,3 +294,214 @@ func (h *EventHandler) IncrementViewCount(c *gin.Context) {
 
 	utils.Success(c, gin.H{"message": "View count incremented"})
 }
+
+// GetEventsByCategory 按分类获取事件列表
+// @Summary 按分类获取事件列表
+// @Description 根据分类获取事件列表，支持分页和排序
+// @Tags events
+// @Produce json
+// @Param category path string true "事件分类"
+// @Param page query int false "页码" default(1)
+// @Param limit query int false "每页数量" default(10)
+// @Param sort_by query string false "排序方式" Enums(time, hotness, views)
+// @Success 200 {object} utils.Response{data=models.EventListResponse}
+// @Failure 400 {object} utils.Response
+// @Failure 500 {object} utils.Response
+// @Router /api/v1/events/category/{category} [get]
+func (h *EventHandler) GetEventsByCategory(c *gin.Context) {
+	category := c.Param("category")
+	if category == "" {
+		utils.BadRequest(c, "Category is required")
+		return
+	}
+
+	var query models.EventQueryRequest
+	if err := c.ShouldBindQuery(&query); err != nil {
+		utils.BadRequest(c, "Invalid query parameters")
+		return
+	}
+
+	events, err := h.eventService.GetEventsByCategory(category, &query)
+	if err != nil {
+		utils.InternalServerError(c, "Failed to get events by category")
+		return
+	}
+
+	utils.Success(c, events)
+}
+
+// GetPopularTags 获取热门标签
+// @Summary 获取热门标签
+// @Description 获取使用频率最高的标签列表
+// @Tags events
+// @Produce json
+// @Param limit query int false "返回标签数量" default(50)
+// @Param min_count query int false "标签使用次数最小值" default(1)
+// @Success 200 {object} utils.Response{data=[]models.TagResponse}
+// @Failure 400 {object} utils.Response
+// @Failure 500 {object} utils.Response
+// @Router /api/v1/events/tags [get]
+func (h *EventHandler) GetPopularTags(c *gin.Context) {
+	limitStr := c.DefaultQuery("limit", "50")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 50
+	}
+
+	minCountStr := c.DefaultQuery("min_count", "1")
+	minCount, err := strconv.Atoi(minCountStr)
+	if err != nil || minCount < 0 {
+		minCount = 1
+	}
+
+	tags, err := h.eventService.GetPopularTags(limit, minCount)
+	if err != nil {
+		utils.InternalServerError(c, "Failed to get popular tags")
+		return
+	}
+
+	utils.Success(c, tags)
+}
+
+// GetTrendingEvents 获取趋势事件
+// @Summary 获取趋势事件
+// @Description 获取上升趋势最快的事件列表
+// @Tags events
+// @Produce json
+// @Param limit query int false "返回事件数量" default(10)
+// @Param time_range query string false "趋势计算时间范围" Enums(1h, 6h, 24h, 7d) default(24h)
+// @Success 200 {object} utils.Response{data=[]models.TrendingEventResponse}
+// @Failure 400 {object} utils.Response
+// @Failure 500 {object} utils.Response
+// @Router /api/v1/events/trending [get]
+func (h *EventHandler) GetTrendingEvents(c *gin.Context) {
+	limitStr := c.DefaultQuery("limit", "10")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 10
+	}
+
+	timeRange := c.DefaultQuery("time_range", "24h")
+	validRanges := map[string]bool{"1h": true, "6h": true, "24h": true, "7d": true}
+	if !validRanges[timeRange] {
+		timeRange = "24h"
+	}
+
+	events, err := h.eventService.GetTrendingEvents(limit, timeRange)
+	if err != nil {
+		utils.InternalServerError(c, "Failed to get trending events")
+		return
+	}
+
+	utils.Success(c, events)
+}
+
+// UpdateEventTags 更新事件标签
+// @Summary 更新事件标签
+// @Description 管理员更新事件标签，支持替换、添加、删除操作
+// @Tags events
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path int true "事件ID"
+// @Param request body models.UpdateTagsRequest true "标签更新请求"
+// @Success 200 {object} utils.Response{data=models.Event}
+// @Failure 400 {object} utils.Response
+// @Failure 401 {object} utils.Response
+// @Failure 403 {object} utils.Response
+// @Failure 404 {object} utils.Response
+// @Failure 500 {object} utils.Response
+// @Router /api/v1/events/{id}/tags [put]
+func (h *EventHandler) UpdateEventTags(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "Invalid event ID")
+		return
+	}
+
+	var req models.UpdateTagsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Invalid request body")
+		return
+	}
+
+	// 设置默认操作为替换
+	if req.Operation == "" {
+		req.Operation = "replace"
+	}
+
+	event, err := h.eventService.UpdateEventTags(uint(id), req.Tags, req.Operation)
+	if err != nil {
+		if err.Error() == "record not found" {
+			utils.NotFound(c, "Event not found")
+			return
+		}
+		utils.InternalServerError(c, "Failed to update event tags")
+		return
+	}
+
+	utils.Success(c, event)
+}
+
+// UpdateEventHotness 更新事件热度
+// @Summary 更新事件热度
+// @Description 系统内部接口，用于更新事件热度分值
+// @Tags events
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path int true "事件ID"
+// @Param request body models.UpdateHotnessRequest true "热度更新请求"
+// @Success 200 {object} utils.Response{data=models.HotnessCalculationResult}
+// @Failure 400 {object} utils.Response
+// @Failure 401 {object} utils.Response
+// @Failure 404 {object} utils.Response
+// @Failure 500 {object} utils.Response
+// @Router /api/v1/events/{id}/hotness [put]
+func (h *EventHandler) UpdateEventHotness(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "Invalid event ID")
+		return
+	}
+
+	var req models.UpdateHotnessRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Invalid request body")
+		return
+	}
+
+	// 如果设置了手动分值，直接更新
+	if req.HotnessScore != nil {
+		err := h.eventService.UpdateHotnessScore(uint(id), *req.HotnessScore)
+		if err != nil {
+			utils.InternalServerError(c, "Failed to update hotness score")
+			return
+		}
+		utils.Success(c, gin.H{"message": "Hotness score updated"})
+		return
+	}
+
+	// 否则使用自动计算
+	autoCalculate := true
+	if req.AutoCalculate != nil {
+		autoCalculate = *req.AutoCalculate
+	}
+
+	if autoCalculate {
+		result, err := h.eventService.CalculateHotness(uint(id), req.Factors)
+		if err != nil {
+			if err.Error() == "record not found" {
+				utils.NotFound(c, "Event not found")
+				return
+			}
+			utils.InternalServerError(c, "Failed to calculate hotness")
+			return
+		}
+		utils.Success(c, result)
+	} else {
+		utils.BadRequest(c, "Either provide hotness_score or set auto_calculate to true")
+	}
+}
