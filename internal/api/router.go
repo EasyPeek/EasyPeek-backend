@@ -21,7 +21,11 @@ func SetupRoutes() *gin.Engine {
 
 	// initialize handler
 	userHandler := NewUserHandler()
+<<<<<<< HEAD
 	newsHandler := NewNewsHandler()
+=======
+	eventHandler := NewEventHandler()
+>>>>>>> ed5c44944380348b78994d972fd55221673313f5
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")
@@ -42,6 +46,27 @@ func SetupRoutes() *gin.Engine {
 			user.GET("/profile", userHandler.GetProfile)
 			user.PUT("/profile", userHandler.UpdateProfile)
 			user.POST("/change-password", userHandler.ChangePassword)
+		}
+
+		// event routes
+		events := v1.Group("/events")
+		{
+			// 公开路由
+			events.GET("", eventHandler.GetEvents)
+			events.GET("/hot", eventHandler.GetHotEvents)
+			events.GET("/categories", eventHandler.GetEventCategories)
+			events.GET("/:id", eventHandler.GetEvent)
+			events.GET("/status/:status", eventHandler.GetEventsByStatus)
+			events.POST("/:id/view", eventHandler.IncrementViewCount)
+
+			// 需要身份验证的路由
+			authEvents := events.Group("")
+			authEvents.Use(middleware.AuthMiddleware())
+			{
+				authEvents.POST("", eventHandler.CreateEvent)
+				authEvents.PUT("/:id", eventHandler.UpdateEvent)
+				authEvents.DELETE("/:id", eventHandler.DeleteEvent)
+			}
 		}
 
 		// admin routes
