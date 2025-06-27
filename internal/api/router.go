@@ -50,7 +50,10 @@ func SetupRoutes() *gin.Engine {
 			// 公开路由
 			events.GET("", eventHandler.GetEvents)
 			events.GET("/hot", eventHandler.GetHotEvents)
+			events.GET("/trending", eventHandler.GetTrendingEvents)
 			events.GET("/categories", eventHandler.GetEventCategories)
+			events.GET("/category/:category", eventHandler.GetEventsByCategory)
+			events.GET("/tags", eventHandler.GetPopularTags)
 			events.GET("/:id", eventHandler.GetEvent)
 			events.GET("/status/:status", eventHandler.GetEventsByStatus)
 			events.POST("/:id/view", eventHandler.IncrementViewCount)
@@ -62,6 +65,22 @@ func SetupRoutes() *gin.Engine {
 				authEvents.POST("", eventHandler.CreateEvent)
 				authEvents.PUT("/:id", eventHandler.UpdateEvent)
 				authEvents.DELETE("/:id", eventHandler.DeleteEvent)
+			}
+
+			// 管理员专用路由
+			adminEvents := events.Group("")
+			adminEvents.Use(middleware.AuthMiddleware())
+			adminEvents.Use(middleware.AdminMiddleware())
+			{
+				adminEvents.PUT("/:id/tags", eventHandler.UpdateEventTags)
+			}
+
+			// 系统内部路由（需要特殊权限）
+			systemEvents := events.Group("")
+			systemEvents.Use(middleware.AuthMiddleware())
+			// TODO: 添加系统权限中间件
+			{
+				systemEvents.PUT("/:id/hotness", eventHandler.UpdateEventHotness)
 			}
 		}
 

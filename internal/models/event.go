@@ -102,3 +102,59 @@ type UpdateEventRequest struct {
 	RelatedLinks []string  `json:"related_links"`
 	Image        string    `json:"image"`
 }
+
+// TagResponse 标签响应结构
+type TagResponse struct {
+	Tag      string `json:"tag"`
+	Count    int    `json:"count"`
+	Category string `json:"category"`
+}
+
+// TrendingEventResponse 趋势事件响应结构
+type TrendingEventResponse struct {
+	ID             uint      `json:"id"`
+	Title          string    `json:"title"`
+	Category       string    `json:"category"`
+	HotnessScore   float64   `json:"hotness_score"`
+	TrendScore     float64   `json:"trend_score"`
+	ViewGrowthRate float64   `json:"view_growth_rate"`
+	Status         string    `json:"status"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+// HotnessFactors 热度计算因子
+type HotnessFactors struct {
+	ViewWeight        float64 `json:"view_weight"`
+	TimeWeight        float64 `json:"time_weight"`
+	InteractionWeight float64 `json:"interaction_weight"`
+}
+
+// CalculationDetails 热度计算详情
+type CalculationDetails struct {
+	ViewScore        float64 `json:"view_score"`
+	TimeScore        float64 `json:"time_score"`
+	InteractionScore float64 `json:"interaction_score"`
+	FinalScore       float64 `json:"final_score"`
+}
+
+// HotnessCalculationResult 热度计算结果
+type HotnessCalculationResult struct {
+	ID                 uint               `json:"id"`
+	HotnessScore       float64            `json:"hotness_score"`
+	PreviousScore      float64            `json:"previous_score"`
+	CalculationDetails CalculationDetails `json:"calculation_details"`
+	UpdatedAt          time.Time          `json:"updated_at"`
+}
+
+// UpdateTagsRequest 更新标签请求
+type UpdateTagsRequest struct {
+	Tags      []string `json:"tags" binding:"required"`
+	Operation string   `json:"operation" binding:"omitempty,oneof=replace add remove"`
+}
+
+// UpdateHotnessRequest 更新热度请求
+type UpdateHotnessRequest struct {
+	HotnessScore  *float64        `json:"hotness_score" binding:"omitempty,min=0,max=10"`
+	AutoCalculate *bool           `json:"auto_calculate"`
+	Factors       *HotnessFactors `json:"factors"`
+}

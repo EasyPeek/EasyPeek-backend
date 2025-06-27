@@ -332,3 +332,296 @@ func (s *EventService) UpdateHotnessScore(id uint, score float64) error {
 		Where("id = ?", id).
 		UpdateColumn("hotness_score", score).Error
 }
+
+// GetEventsByCategory 按分类获取事件列表
+func (s *EventService) GetEventsByCategory(category string, query *models.EventQueryRequest) (*models.EventListResponse, error) {
+	var events []models.Event
+	var total int64
+
+	db := s.db.Model(&models.Event{}).Where("category = ?", category)
+
+	// 添加状态筛选
+	if query.Status != "" {
+		db = db.Where("status = ?", query.Status)
+	}
+
+	// 计算总数
+	if err := db.Count(&total).Error; err != nil {
+		return nil, err
+	}
+
+	// 排序
+	switch query.SortBy {
+	case "hotness":
+		db = db.Order("hotness_score DESC, created_at DESC")
+	case "views":
+		db = db.Order("view_count DESC, created_at DESC")
+	default:
+		db = db.Order("created_at DESC")
+	}
+
+	// 分页
+	offset := (query.Page - 1) * query.Limit
+	if err := db.Offset(offset).Limit(query.Limit).Find(&events).Error; err != nil {
+		return nil, err
+	}
+
+	var eventResponses []models.EventResponse
+	for _, event := range events {
+		eventResponses = append(eventResponses, convertToEventResponse(&event))
+	}
+
+	return &models.EventListResponse{
+		Total:  total,
+		Events: eventResponses,
+	}, nil
+}
+
+// GetPopularTags 获取热门标签
+func (s *EventService) GetPopularTags(limit int, minCount int) ([]models.TagResponse, error) {
+	type TagCount struct {
+		Tag      string `json:"tag"`
+		Count    int    `json:"count"`
+		Category string `json:"category"`
+	}
+
+	var results []TagCount
+	// 这里使用原生SQL查询，因为标签存储为JSON字符串
+	query := `
+		SELECT 
+			TRIM(BOTH '"' FROM JSON_EXTRACT(tags, CONCAT('$[', numbers.n, ']'))) as tag,
+			COUNT(*) as count,
+			category
+		FROM events
+		CROSS JOIN (
+			SELECT 0 as n UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 
+			UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9
+		) numbers
+		WHERE JSON_LENGTH(tags) > numbers.n
+		AND tags != '[]' AND tags != ''
+		GROUP BY tag, category
+		HAVING count >= ?
+		ORDER BY count DESC, tag
+		LIMIT ?
+	`
+
+	err := s.db.Raw(query, minCount, limit).Scan(&results).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var tagResponses []models.TagResponse
+	for _, result := range results {
+		tagResponses = append(tagResponses, models.TagResponse{
+			Tag:      result.Tag,
+			Count:    result.Count,
+			Category: result.Category,
+		})
+	}
+
+	return tagResponses, nil
+}
+
+// GetTrendingEvents 获取趋势事件
+func (s *EventService) GetTrendingEvents(limit int, timeRange string) ([]models.TrendingEventResponse, error) {
+	var events []models.Event
+
+	// 根据时间范围确定查询条件
+	var timeCondition time.Time
+	switch timeRange {
+	case "1h":
+		timeCondition = time.Now().Add(-1 * time.Hour)
+	case "6h":
+		timeCondition = time.Now().Add(-6 * time.Hour)
+	case "24h":
+		timeCondition = time.Now().Add(-24 * time.Hour)
+	case "7d":
+		timeCondition = time.Now().Add(-7 * 24 * time.Hour)
+	default:
+		timeCondition = time.Now().Add(-24 * time.Hour)
+	}
+
+	// 查询在指定时间范围内创建或更新的事件
+	// 按热度分值和浏览量的组合进行排序，模拟趋势计算
+	err := s.db.Where("created_at >= ? OR updated_at >= ?", timeCondition, timeCondition).
+		Order("(hotness_score * 0.6 + LEAST(view_count / 100.0, 10) * 0.4) DESC").
+		Limit(limit).
+		Find(&events).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	var trendingEvents []models.TrendingEventResponse
+	for _, event := range events {
+		// 计算趋势分值（这里简化计算，实际应用中可能需要更复杂的算法）
+		trendScore := event.HotnessScore*0.6 + float64(event.ViewCount)/100.0*0.4
+		if trendScore > 10 {
+			trendScore = 10
+		}
+
+		// 计算浏览量增长率（这里使用模拟值，实际需要历史数据对比）
+		viewGrowthRate := float64(event.ViewCount) * 0.1 // 简化计算
+
+		trendingEvents = append(trendingEvents, models.TrendingEventResponse{
+			ID:             event.ID,
+			Title:          event.Title,
+			Category:       event.Category,
+			HotnessScore:   event.HotnessScore,
+			TrendScore:     trendScore,
+			ViewGrowthRate: viewGrowthRate,
+			Status:         event.Status,
+			CreatedAt:      event.CreatedAt,
+		})
+	}
+
+	return trendingEvents, nil
+}
+
+// UpdateEventTags 更新事件标签
+func (s *EventService) UpdateEventTags(id uint, tags []string, operation string) (*models.Event, error) {
+	var event models.Event
+	if err := s.db.First(&event, id).Error; err != nil {
+		return nil, err
+	}
+
+	var newTags []string
+	currentTags := jsonToSlice(event.Tags)
+
+	switch operation {
+	case "replace":
+		newTags = tags
+	case "add":
+		// 添加新标签，去重
+		tagMap := make(map[string]bool)
+		for _, tag := range currentTags {
+			tagMap[tag] = true
+		}
+		for _, tag := range tags {
+			tagMap[tag] = true
+		}
+		for tag := range tagMap {
+			newTags = append(newTags, tag)
+		}
+	case "remove":
+		// 移除指定标签
+		removeMap := make(map[string]bool)
+		for _, tag := range tags {
+			removeMap[tag] = true
+		}
+		for _, tag := range currentTags {
+			if !removeMap[tag] {
+				newTags = append(newTags, tag)
+			}
+		}
+	default:
+		newTags = tags
+	}
+
+	event.Tags = sliceToJSON(newTags)
+	event.UpdatedAt = time.Now()
+
+	if err := s.db.Save(&event).Error; err != nil {
+		return nil, err
+	}
+
+	return &event, nil
+}
+
+// CalculateHotness 计算事件热度（自动计算）
+func (s *EventService) CalculateHotness(id uint, factors *models.HotnessFactors) (*models.HotnessCalculationResult, error) {
+	var event models.Event
+	if err := s.db.First(&event, id).Error; err != nil {
+		return nil, err
+	}
+
+	// 设置默认权重
+	if factors == nil {
+		factors = &models.HotnessFactors{
+			ViewWeight:        0.4,
+			TimeWeight:        0.3,
+			InteractionWeight: 0.3,
+		}
+	}
+
+	// 计算各项分值
+	viewScore := calculateViewScore(event.ViewCount)
+	timeScore := calculateTimeScore(event.CreatedAt)
+	interactionScore := calculateInteractionScore(event.ViewCount) // 简化，用浏览量代替交互
+
+	// 计算最终分值
+	finalScore := viewScore*factors.ViewWeight +
+		timeScore*factors.TimeWeight +
+		interactionScore*factors.InteractionWeight
+
+	// 限制在0-10范围内
+	if finalScore > 10 {
+		finalScore = 10
+	}
+	if finalScore < 0 {
+		finalScore = 0
+	}
+
+	previousScore := event.HotnessScore
+	event.HotnessScore = finalScore
+	event.UpdatedAt = time.Now()
+
+	if err := s.db.Save(&event).Error; err != nil {
+		return nil, err
+	}
+
+	return &models.HotnessCalculationResult{
+		ID:            event.ID,
+		HotnessScore:  finalScore,
+		PreviousScore: previousScore,
+		CalculationDetails: models.CalculationDetails{
+			ViewScore:        viewScore,
+			TimeScore:        timeScore,
+			InteractionScore: interactionScore,
+			FinalScore:       finalScore,
+		},
+		UpdatedAt: event.UpdatedAt,
+	}, nil
+}
+
+// 辅助函数：计算浏览量分值
+func calculateViewScore(viewCount int64) float64 {
+	// 浏览量分值计算：对数增长，最高10分
+	if viewCount == 0 {
+		return 0
+	}
+	score := float64(viewCount) / 1000.0 * 8.0
+	if score > 10 {
+		score = 10
+	}
+	return score
+}
+
+// 辅助函数：计算时间分值
+func calculateTimeScore(createdAt time.Time) float64 {
+	// 时间分值计算：越新的事件分值越高
+	hours := time.Since(createdAt).Hours()
+	if hours <= 1 {
+		return 10
+	} else if hours <= 6 {
+		return 9
+	} else if hours <= 24 {
+		return 8
+	} else if hours <= 72 {
+		return 6
+	} else if hours <= 168 { // 7天
+		return 4
+	} else {
+		return 2
+	}
+}
+
+// 辅助函数：计算交互分值
+func calculateInteractionScore(viewCount int64) float64 {
+	// 简化计算，实际应该包括评论、分享等交互数据
+	score := float64(viewCount) / 500.0 * 6.0
+	if score > 10 {
+		score = 10
+	}
+	return score
+}
