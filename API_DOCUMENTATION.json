@@ -1,0 +1,1200 @@
+{
+  "info": {
+    "title": "EasyPeek API Documentation",
+    "version": "1.1.0",
+    "description": "EasyPeek事件管理系统API接口文档",
+    "baseURL": "http://localhost:8080",
+    "contentType": "application/json",
+    "encoding": "UTF-8",
+    "supportedMethods": ["GET", "POST", "PUT", "DELETE"],
+    "lastUpdated": "2025-06-27T00:00:00Z"
+  },
+  "authentication": {
+    "type": "Bearer Token",
+    "header": "Authorization",
+    "format": "Bearer <jwt_token>",
+    "tokenEndpoint": "/api/v1/auth/login",
+    "description": "通过登录接口获取JWT Token，在需要认证的接口请求头中包含该Token"
+  },
+  "responseFormat": {
+    "description": "所有API接口都遵循统一的响应格式",
+    "structure": {
+      "code": "HTTP状态码",
+      "message": "响应消息",
+      "data": "响应数据（可为对象、数组或null）"
+    },
+    "example": {
+      "code": 200,
+      "message": "success",
+      "data": {}
+    }
+  },
+  "endpoints": {
+    "health": {
+      "path": "/health",
+      "method": "GET",
+      "description": "检查服务器运行状态",
+      "authentication": false,
+      "parameters": {},
+      "response": {
+        "example": {
+          "status": "ok",
+          "message": "EasyPeek backend is running"
+        }
+      }
+    },
+    "auth": {
+      "register": {
+        "path": "/api/v1/auth/register",
+        "method": "POST",
+        "description": "用户注册",
+        "authentication": false,
+        "requestBody": {
+          "required": true,
+          "schema": {
+            "username": {
+              "type": "string",
+              "required": true,
+              "description": "用户名"
+            },
+            "email": {
+              "type": "string",
+              "required": true,
+              "format": "email",
+              "description": "邮箱地址"
+            },
+            "password": {
+              "type": "string",
+              "required": true,
+              "minLength": 6,
+              "description": "密码"
+            }
+          }
+        },
+        "response": {
+          "201": {
+            "description": "注册成功",
+            "example": {
+              "code": 201,
+              "message": "User registered successfully",
+              "data": {
+                "id": 1,
+                "username": "testuser",
+                "email": "test@example.com",
+                "created_at": "2025-06-27T10:00:00Z"
+              }
+            }
+          }
+        }
+      },
+      "login": {
+        "path": "/api/v1/auth/login",
+        "method": "POST",
+        "description": "用户登录",
+        "authentication": false,
+        "requestBody": {
+          "required": true,
+          "schema": {
+            "email": {
+              "type": "string",
+              "required": true,
+              "format": "email",
+              "description": "邮箱地址"
+            },
+            "password": {
+              "type": "string",
+              "required": true,
+              "description": "密码"
+            }
+          }
+        },
+        "response": {
+          "200": {
+            "description": "登录成功",
+            "example": {
+              "code": 200,
+              "message": "Login successful",
+              "data": {
+                "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "user": {
+                  "id": 1,
+                  "username": "testuser",
+                  "email": "test@example.com",
+                  "role": "user"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "user": {
+      "getProfile": {
+        "path": "/api/v1/user/profile",
+        "method": "GET",
+        "description": "获取当前用户资料",
+        "authentication": true,
+        "parameters": {},
+        "response": {
+          "200": {
+            "description": "获取成功",
+            "example": {
+              "code": 200,
+              "message": "success",
+              "data": {
+                "id": 1,
+                "username": "testuser",
+                "email": "test@example.com",
+                "role": "user",
+                "created_at": "2025-06-27T10:00:00Z",
+                "updated_at": "2025-06-27T10:00:00Z"
+              }
+            }
+          }
+        }
+      },
+      "updateProfile": {
+        "path": "/api/v1/user/profile",
+        "method": "PUT",
+        "description": "更新用户资料",
+        "authentication": true,
+        "requestBody": {
+          "required": true,
+          "schema": {
+            "username": {
+              "type": "string",
+              "required": false,
+              "description": "用户名"
+            },
+            "email": {
+              "type": "string",
+              "required": false,
+              "format": "email",
+              "description": "邮箱地址"
+            }
+          }
+        },
+        "response": {
+          "200": {
+            "description": "更新成功"
+          }
+        }
+      },
+      "changePassword": {
+        "path": "/api/v1/user/change-password",
+        "method": "POST",
+        "description": "修改密码",
+        "authentication": true,
+        "requestBody": {
+          "required": true,
+          "schema": {
+            "old_password": {
+              "type": "string",
+              "required": true,
+              "description": "旧密码"
+            },
+            "new_password": {
+              "type": "string",
+              "required": true,
+              "minLength": 6,
+              "description": "新密码"
+            }
+          }
+        },
+        "response": {
+          "200": {
+            "description": "修改成功"
+          }
+        }
+      }
+    },
+    "events": {
+      "getEvents": {
+        "path": "/api/v1/events",
+        "method": "GET",
+        "description": "获取事件列表",
+        "authentication": false,
+        "parameters": {
+          "query": {
+            "status": {
+              "type": "string",
+              "required": false,
+              "enum": ["进行中", "已结束"],
+              "description": "事件状态"
+            },
+            "category": {
+              "type": "string",
+              "required": false,
+              "description": "事件分类"
+            },
+            "search": {
+              "type": "string",
+              "required": false,
+              "description": "搜索关键词（标题、描述、内容、地点）"
+            },
+            "sort_by": {
+              "type": "string",
+              "required": false,
+              "enum": ["time", "hotness", "views"],
+              "default": "time",
+              "description": "排序方式"
+            },
+            "page": {
+              "type": "integer",
+              "required": false,
+              "default": 1,
+              "description": "页码"
+            },
+            "limit": {
+              "type": "integer",
+              "required": false,
+              "default": 10,
+              "description": "每页数量"
+            }
+          }
+        },
+        "response": {
+          "200": {
+            "description": "获取成功",
+            "example": {
+              "code": 200,
+              "message": "success",
+              "data": {
+                "total": 25,
+                "events": [
+                  {
+                    "id": 1,
+                    "title": "AI技术峰会2025",
+                    "description": "最新人工智能技术发展趋势探讨",
+                    "content": "详细的会议内容介绍...",
+                    "start_time": "2025-07-01T09:00:00Z",
+                    "end_time": "2025-07-01T18:00:00Z",
+                    "location": "北京国际会议中心",
+                    "status": "进行中",
+                    "category": "科技",
+                    "tags": "[\"AI\", \"技术峰会\", \"人工智能\"]",
+                    "source": "科技日报",
+                    "author": "张三",
+                    "related_links": "[\"https://ai-summit.com\"]",
+                    "view_count": 1250,
+                    "hotness_score": 8.5,
+                    "created_at": "2025-06-27T10:00:00Z",
+                    "updated_at": "2025-06-27T10:00:00Z"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "getHotEvents": {
+        "path": "/api/v1/events/hot",
+        "method": "GET",
+        "description": "获取热点事件",
+        "authentication": false,
+        "parameters": {
+          "query": {
+            "limit": {
+              "type": "integer",
+              "required": false,
+              "default": 10,
+              "description": "限制数量"
+            }
+          }
+        },
+        "response": {
+          "200": {
+            "description": "获取成功",
+            "example": {
+              "code": 200,
+              "message": "success",
+              "data": [
+                {
+                  "id": 1,
+                  "title": "AI技术峰会2025",
+                  "hotness_score": 9.2,
+                  "view_count": 5432,
+                  "category": "科技",
+                  "status": "进行中"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "getCategories": {
+        "path": "/api/v1/events/categories",
+        "method": "GET",
+        "description": "获取事件分类列表",
+        "authentication": false,
+        "parameters": {},
+        "response": {
+          "200": {
+            "description": "获取成功",
+            "example": {
+              "code": 200,
+              "message": "success",
+              "data": ["政治", "经济", "科技", "体育", "娱乐", "社会", "教育", "健康"]
+            }
+          }
+        }
+      },
+      "getEventById": {
+        "path": "/api/v1/events/{id}",
+        "method": "GET",
+        "description": "获取事件详情",
+        "authentication": false,
+        "parameters": {
+          "path": {
+            "id": {
+              "type": "integer",
+              "required": true,
+              "description": "事件ID"
+            }
+          }
+        },
+        "response": {
+          "200": {
+            "description": "获取成功",
+            "example": {
+              "code": 200,
+              "message": "success",
+              "data": {
+                "id": 1,
+                "title": "AI技术峰会2025",
+                "description": "最新人工智能技术发展趋势探讨",
+                "content": "详细的会议内容...",
+                "start_time": "2025-07-01T09:00:00Z",
+                "end_time": "2025-07-01T18:00:00Z",
+                "location": "北京国际会议中心",
+                "status": "进行中",
+                "category": "科技",
+                "tags": "[\"AI\", \"技术峰会\"]",
+                "source": "科技日报",
+                "author": "张三",
+                "related_links": "[\"https://ai-summit.com\"]",
+                "view_count": 1251,
+                "hotness_score": 8.5,
+                "created_at": "2025-06-27T10:00:00Z",
+                "updated_at": "2025-06-27T10:00:00Z"
+              }
+            }
+          }
+        }
+      },
+      "getEventsByStatus": {
+        "path": "/api/v1/events/status/{status}",
+        "method": "GET",
+        "description": "按状态获取事件",
+        "authentication": false,
+        "parameters": {
+          "path": {
+            "status": {
+              "type": "string",
+              "required": true,
+              "enum": ["进行中", "已结束"],
+              "description": "事件状态"
+            }
+          }
+        },
+        "response": {
+          "200": {
+            "description": "获取成功"
+          }
+        }
+      },
+      "getEventsByCategory": {
+        "path": "/api/v1/events/category/{category}",
+        "method": "GET",
+        "description": "按分类获取事件",
+        "authentication": false,
+        "parameters": {
+          "path": {
+            "category": {
+              "type": "string",
+              "required": true,
+              "description": "事件分类（政治、经济、科技等）"
+            }
+          },
+          "query": {
+            "page": {
+              "type": "integer",
+              "required": false,
+              "default": 1,
+              "description": "页码"
+            },
+            "limit": {
+              "type": "integer",
+              "required": false,
+              "default": 10,
+              "description": "每页数量"
+            },
+            "sort_by": {
+              "type": "string",
+              "required": false,
+              "enum": ["time", "hotness", "views"],
+              "default": "time",
+              "description": "排序方式"
+            }
+          }
+        },
+        "response": {
+          "200": {
+            "description": "获取成功",
+            "example": {
+              "code": 200,
+              "message": "success",
+              "data": {
+                "total": 15,
+                "category": "科技",
+                "events": [
+                  {
+                    "id": 1,
+                    "title": "AI技术峰会2025",
+                    "description": "最新人工智能技术发展趋势探讨",
+                    "start_time": "2025-07-01T09:00:00Z",
+                    "end_time": "2025-07-01T18:00:00Z",
+                    "location": "北京国际会议中心",
+                    "status": "进行中",
+                    "category": "科技",
+                    "view_count": 1250,
+                    "hotness_score": 8.5
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "getTags": {
+        "path": "/api/v1/events/tags",
+        "method": "GET",
+        "description": "获取热门标签",
+        "authentication": false,
+        "parameters": {
+          "query": {
+            "limit": {
+              "type": "integer",
+              "required": false,
+              "default": 50,
+              "description": "返回标签数量限制"
+            },
+            "min_count": {
+              "type": "integer",
+              "required": false,
+              "default": 1,
+              "description": "标签使用次数最小值"
+            }
+          }
+        },
+        "response": {
+          "200": {
+            "description": "获取成功",
+            "example": {
+              "code": 200,
+              "message": "success",
+              "data": [
+                {
+                  "tag": "AI",
+                  "count": 25,
+                  "category": "科技"
+                },
+                {
+                  "tag": "技术峰会",
+                  "count": 18,
+                  "category": "科技"
+                },
+                {
+                  "tag": "经济政策",
+                  "count": 12,
+                  "category": "经济"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "getTrendingEvents": {
+        "path": "/api/v1/events/trending",
+        "method": "GET",
+        "description": "获取趋势事件",
+        "authentication": false,
+        "parameters": {
+          "query": {
+            "limit": {
+              "type": "integer",
+              "required": false,
+              "default": 10,
+              "description": "返回事件数量限制"
+            },
+            "time_range": {
+              "type": "string",
+              "required": false,
+              "enum": ["1h", "6h", "24h", "7d"],
+              "default": "24h",
+              "description": "趋势计算时间范围"
+            }
+          }
+        },
+        "response": {
+          "200": {
+            "description": "获取成功",
+            "example": {
+              "code": 200,
+              "message": "success",
+              "data": [
+                {
+                  "id": 5,
+                  "title": "量子计算突破性进展",
+                  "category": "科技",
+                  "hotness_score": 8.9,
+                  "trend_score": 95.5,
+                  "view_growth_rate": 150.2,
+                  "status": "进行中",
+                  "created_at": "2025-06-27T08:00:00Z"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "incrementViewCount": {
+        "path": "/api/v1/events/{id}/view",
+        "method": "POST",
+        "description": "记录事件浏览次数",
+        "authentication": false,
+        "parameters": {
+          "path": {
+            "id": {
+              "type": "integer",
+              "required": true,
+              "description": "事件ID"
+            }
+          }
+        },
+        "response": {
+          "200": {
+            "description": "记录成功",
+            "example": {
+              "code": 200,
+              "message": "success",
+              "data": {
+                "message": "View count incremented"
+              }
+            }
+          }
+        }
+      },
+      "createEvent": {
+        "path": "/api/v1/events",
+        "method": "POST",
+        "description": "创建事件",
+        "authentication": true,
+        "requestBody": {
+          "required": true,
+          "schema": {
+            "title": {
+              "type": "string",
+              "required": true,
+              "maxLength": 200,
+              "description": "事件标题"
+            },
+            "description": {
+              "type": "string",
+              "required": false,
+              "maxLength": 1000,
+              "description": "事件描述"
+            },
+            "content": {
+              "type": "string",
+              "required": true,
+              "description": "事件详细内容"
+            },
+            "start_time": {
+              "type": "string",
+              "required": true,
+              "format": "date-time",
+              "description": "开始时间 (ISO 8601)"
+            },
+            "end_time": {
+              "type": "string",
+              "required": true,
+              "format": "date-time",
+              "description": "结束时间 (ISO 8601)"
+            },
+            "location": {
+              "type": "string",
+              "required": true,
+              "maxLength": 255,
+              "description": "事件地点"
+            },
+            "category": {
+              "type": "string",
+              "required": true,
+              "maxLength": 50,
+              "description": "事件分类"
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "required": false,
+              "description": "事件标签"
+            },
+            "source": {
+              "type": "string",
+              "required": false,
+              "maxLength": 100,
+              "description": "事件来源"
+            },
+            "author": {
+              "type": "string",
+              "required": false,
+              "maxLength": 100,
+              "description": "作者"
+            },
+            "related_links": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uri"
+              },
+              "required": false,
+              "description": "相关链接"
+            },
+            "image": {
+              "type": "string",
+              "required": false,
+              "format": "uri",
+              "description": "事件图片链接"
+            }
+          }
+        },
+        "response": {
+          "201": {
+            "description": "创建成功",
+            "example": {
+              "code": 201,
+              "message": "Event created successfully",
+              "data": {
+                "id": 10,
+                "title": "Vue.js 3.0 技术分享会",
+                "status": "进行中",
+                "view_count": 0,
+                "hotness_score": 0,
+                "created_at": "2025-06-27T12:00:00Z"
+              }
+            }
+          }
+        }
+      },
+      "updateEvent": {
+        "path": "/api/v1/events/{id}",
+        "method": "PUT",
+        "description": "更新事件",
+        "authentication": true,
+        "parameters": {
+          "path": {
+            "id": {
+              "type": "integer",
+              "required": true,
+              "description": "事件ID"
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "所有字段都是可选的",
+          "schema": {
+            "title": {
+              "type": "string",
+              "required": false,
+              "maxLength": 200,
+              "description": "事件标题"
+            },
+            "description": {
+              "type": "string",
+              "required": false,
+              "maxLength": 1000,
+              "description": "事件描述"
+            },
+            "content": {
+              "type": "string",
+              "required": false,
+              "description": "事件详细内容"
+            },
+            "start_time": {
+              "type": "string",
+              "required": false,
+              "format": "date-time",
+              "description": "开始时间 (ISO 8601)"
+            },
+            "end_time": {
+              "type": "string",
+              "required": false,
+              "format": "date-time",
+              "description": "结束时间 (ISO 8601)"
+            },
+            "location": {
+              "type": "string",
+              "required": false,
+              "maxLength": 255,
+              "description": "事件地点"
+            },
+            "status": {
+              "type": "string",
+              "required": false,
+              "enum": ["进行中", "已结束"],
+              "description": "事件状态"
+            },
+            "category": {
+              "type": "string",
+              "required": false,
+              "maxLength": 50,
+              "description": "事件分类"
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "required": false,
+              "description": "事件标签"
+            },
+            "source": {
+              "type": "string",
+              "required": false,
+              "maxLength": 100,
+              "description": "事件来源"
+            },
+            "author": {
+              "type": "string",
+              "required": false,
+              "maxLength": 100,
+              "description": "作者"
+            },
+            "related_links": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uri"
+              },
+              "required": false,
+              "description": "相关链接"
+            },
+            "image": {
+              "type": "string",
+              "required": false,
+              "format": "uri",
+              "description": "事件图片链接"
+            }
+          }
+        },
+        "response": {
+          "200": {
+            "description": "更新成功"
+          }
+        }
+      },
+      "updateEventTags": {
+        "path": "/api/v1/events/{id}/tags",
+        "method": "PUT",
+        "description": "更新事件标签",
+        "authentication": true,
+        "permission": "admin",
+        "parameters": {
+          "path": {
+            "id": {
+              "type": "integer",
+              "required": true,
+              "description": "事件ID"
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "schema": {
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "required": true,
+              "description": "新的标签列表，将完全替换现有标签"
+            },
+            "operation": {
+              "type": "string",
+              "required": false,
+              "enum": ["replace", "add", "remove"],
+              "default": "replace",
+              "description": "操作类型：替换、添加或删除标签"
+            }
+          }
+        },
+        "response": {
+          "200": {
+            "description": "更新成功",
+            "example": {
+              "code": 200,
+              "message": "success",
+              "data": {
+                "id": 1,
+                "tags": ["AI", "技术峰会", "人工智能", "新标签"],
+                "updated_at": "2025-06-27T15:30:00Z"
+              }
+            }
+          }
+        }
+      },
+      "updateEventHotness": {
+        "path": "/api/v1/events/{id}/hotness",
+        "method": "PUT",
+        "description": "更新事件热度",
+        "authentication": true,
+        "permission": "system",
+        "parameters": {
+          "path": {
+            "id": {
+              "type": "integer",
+              "required": true,
+              "description": "事件ID"
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "schema": {
+            "hotness_score": {
+              "type": "number",
+              "required": false,
+              "minimum": 0,
+              "maximum": 10,
+              "description": "热度分值（0-10）"
+            },
+            "auto_calculate": {
+              "type": "boolean",
+              "required": false,
+              "default": true,
+              "description": "是否自动计算热度（基于浏览量、评论数、时间等因素）"
+            },
+            "factors": {
+              "type": "object",
+              "required": false,
+              "properties": {
+                "view_weight": {
+                  "type": "number",
+                  "default": 0.4,
+                  "description": "浏览量权重"
+                },
+                "time_weight": {
+                  "type": "number",
+                  "default": 0.3,
+                  "description": "时间因素权重"
+                },
+                "interaction_weight": {
+                  "type": "number",
+                  "default": 0.3,
+                  "description": "互动因素权重"
+                }
+              },
+              "description": "热度计算权重配置"
+            }
+          }
+        },
+        "response": {
+          "200": {
+            "description": "更新成功",
+            "example": {
+              "code": 200,
+              "message": "success",
+              "data": {
+                "id": 1,
+                "hotness_score": 8.7,
+                "previous_score": 8.5,
+                "calculation_details": {
+                  "view_score": 8.2,
+                  "time_score": 9.1,
+                  "interaction_score": 8.9,
+                  "final_score": 8.7
+                },
+                "updated_at": "2025-06-27T15:30:00Z"
+              }
+            }
+          }
+        }
+      }
+    },
+    "admin": {
+      "getUsers": {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "description": "获取用户列表",
+        "authentication": true,
+        "permission": "admin",
+        "parameters": {
+          "query": {
+            "page": {
+              "type": "integer",
+              "required": false,
+              "default": 1,
+              "description": "页码"
+            },
+            "limit": {
+              "type": "integer",
+              "required": false,
+              "default": 10,
+              "description": "每页数量"
+            }
+          }
+        },
+        "response": {
+          "200": {
+            "description": "获取成功"
+          }
+        }
+      },
+      "getUserById": {
+        "path": "/api/v1/admin/users/{id}",
+        "method": "GET",
+        "description": "获取用户详情",
+        "authentication": true,
+        "permission": "admin",
+        "parameters": {
+          "path": {
+            "id": {
+              "type": "integer",
+              "required": true,
+              "description": "用户ID"
+            }
+          }
+        },
+        "response": {
+          "200": {
+            "description": "获取成功"
+          }
+        }
+      },
+      "deleteUser": {
+        "path": "/api/v1/admin/users/{id}",
+        "method": "DELETE",
+        "description": "删除用户",
+        "authentication": true,
+        "permission": "admin",
+        "parameters": {
+          "path": {
+            "id": {
+              "type": "integer",
+              "required": true,
+              "description": "用户ID"
+            }
+          }
+        },
+        "response": {
+          "200": {
+            "description": "删除成功"
+          }
+        }
+      }
+    }
+  },
+  "errorCodes": {
+    "200": {
+      "description": "请求成功",
+      "scenarios": ["正常的GET、PUT、DELETE请求"]
+    },
+    "201": {
+      "description": "创建成功",
+      "scenarios": ["POST请求成功创建资源"]
+    },
+    "400": {
+      "description": "请求参数错误",
+      "scenarios": ["参数格式错误", "必填参数缺失"],
+      "example": {
+        "code": 400,
+        "message": "Invalid request parameters: title is required",
+        "data": null
+      }
+    },
+    "401": {
+      "description": "未授权",
+      "scenarios": ["Token无效", "Token过期", "Token缺失"],
+      "example": {
+        "code": 401,
+        "message": "Token is invalid or expired",
+        "data": null
+      }
+    },
+    "403": {
+      "description": "权限不足",
+      "scenarios": ["普通用户访问管理员接口"],
+      "example": {
+        "code": 403,
+        "message": "Insufficient permissions",
+        "data": null
+      }
+    },
+    "404": {
+      "description": "资源不存在",
+      "scenarios": ["请求的事件不存在", "请求的用户不存在"],
+      "example": {
+        "code": 404,
+        "message": "Event not found",
+        "data": null
+      }
+    },
+    "409": {
+      "description": "资源冲突",
+      "scenarios": ["邮箱已注册", "用户名已存在"]
+    },
+    "500": {
+      "description": "服务器内部错误",
+      "scenarios": ["数据库连接失败", "系统异常"]
+    }
+  },
+  "examples": {
+    "userWorkflow": {
+      "description": "完整的用户操作流程",
+      "steps": [
+        {
+          "step": 1,
+          "description": "用户注册",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/auth/register",
+            "body": {
+              "username": "developer",
+              "email": "dev@example.com",
+              "password": "securepass123"
+            }
+          }
+        },
+        {
+          "step": 2,
+          "description": "用户登录获取Token",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/auth/login",
+            "body": {
+              "email": "dev@example.com",
+              "password": "securepass123"
+            }
+          }
+        },
+        {
+          "step": 3,
+          "description": "获取热点事件",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/events/hot?limit=5"
+          }
+        },
+        {
+          "step": 4,
+          "description": "搜索科技类事件",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/events?category=科技&sort_by=hotness"
+          }
+        },
+        {
+          "step": 5,
+          "description": "查看事件详情",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/events/1"
+          }
+        },
+        {
+          "step": 6,
+          "description": "记录浏览次数",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/events/1/view"
+          }
+        },
+        {
+          "step": 7,
+          "description": "创建新事件",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/events",
+            "headers": {
+              "Authorization": "Bearer <token>"
+            },
+            "body": {
+              "title": "React 18 新特性深度解析",
+              "description": "探索React 18中的并发特性、Suspense和自动批处理",
+              "content": "React 18带来了许多激动人心的新特性...",
+              "start_time": "2025-08-10T14:00:00Z",
+              "end_time": "2025-08-10T16:00:00Z",
+              "location": "上海浦东软件园",
+              "category": "科技",
+              "tags": ["React", "前端", "JavaScript", "Web开发"],
+              "source": "React开发者社区",
+              "author": "李明"
+            }
+          }
+        },
+        {
+          "step": 8,
+          "description": "获取热门标签",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/events/tags?limit=20"
+          }
+        },
+        {
+          "step": 9,
+          "description": "按分类获取事件",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/events/category/科技?page=1&limit=5&sort_by=hotness"
+          }
+        },
+        {
+          "step": 10,
+          "description": "获取趋势事件",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/events/trending?limit=5&time_range=24h"
+          }
+        }
+      ]
+    },
+    "jsClientCode": {
+      "description": "JavaScript客户端调用示例",
+      "code": "class EasyPeekAPI {\n  constructor(baseURL = 'http://localhost:8080') {\n    this.baseURL = baseURL;\n    this.token = localStorage.getItem('token');\n  }\n\n  async request(endpoint, options = {}) {\n    const url = `${this.baseURL}${endpoint}`;\n    const config = {\n      headers: {\n        'Content-Type': 'application/json',\n        ...(this.token && { Authorization: `Bearer ${this.token}` }),\n        ...options.headers,\n      },\n      ...options,\n    };\n\n    const response = await fetch(url, config);\n    return response.json();\n  }\n\n  async getEvents(params = {}) {\n    const query = new URLSearchParams(params).toString();\n    return this.request(`/api/v1/events?${query}`);\n  }\n\n  async getHotEvents(limit = 10) {\n    return this.request(`/api/v1/events/hot?limit=${limit}`);\n  }\n\n  async getTrendingEvents(limit = 10, timeRange = '24h') {\n    return this.request(`/api/v1/events/trending?limit=${limit}&time_range=${timeRange}`);\n  }\n\n  async getEventsByCategory(category, params = {}) {\n    const query = new URLSearchParams(params).toString();\n    return this.request(`/api/v1/events/category/${encodeURIComponent(category)}?${query}`);\n  }\n\n  async getTags(limit = 50, minCount = 1) {\n    return this.request(`/api/v1/events/tags?limit=${limit}&min_count=${minCount}`);\n  }\n\n  async updateEventTags(id, tags, operation = 'replace') {\n    return this.request(`/api/v1/events/${id}/tags`, {\n      method: 'PUT',\n      body: JSON.stringify({ tags, operation }),\n    });\n  }\n\n  async updateEventHotness(id, hotnessScore, autoCalculate = true) {\n    return this.request(`/api/v1/events/${id}/hotness`, {\n      method: 'PUT',\n      body: JSON.stringify({ \n        hotness_score: hotnessScore, \n        auto_calculate: autoCalculate \n      }),\n    });\n  }\n\n  async login(email, password) {\n    const response = await this.request('/api/v1/auth/login', {\n      method: 'POST',\n      body: JSON.stringify({ email, password }),\n    });\n    \n    if (response.code === 200) {\n      this.token = response.data.token;\n      localStorage.setItem('token', this.token);\n    }\n    \n    return response;\n  }\n}\n\n// 使用示例\nconst api = new EasyPeekAPI();\n\n// 获取热点事件\napi.getHotEvents(5).then(response => {\n  if (response.code === 200) {\n    console.log('热点事件:', response.data);\n  }\n});\n\n// 获取趋势事件\napi.getTrendingEvents(10, '24h').then(response => {\n  if (response.code === 200) {\n    console.log('趋势事件:', response.data);\n  }\n});\n\n// 按分类获取事件\napi.getEventsByCategory('科技', { page: 1, limit: 10, sort_by: 'hotness' }).then(response => {\n  if (response.code === 200) {\n    console.log('科技类事件:', response.data);\n  }\n});\n\n// 获取热门标签\napi.getTags(20, 2).then(response => {\n  if (response.code === 200) {\n    console.log('热门标签:', response.data);\n  }\n});"
+    }
+  },
+  "changeLog": {
+    "v1.1.0": {
+      "date": "2025-06-27",
+      "changes": [
+        "新增按分类获取事件接口",
+        "新增获取热门标签接口",
+        "新增获取趋势事件接口",
+        "新增更新事件标签接口（管理员权限）",
+        "新增更新事件热度接口（系统权限）",
+        "完善事件分类和标签管理功能",
+        "增强热点事件排序算法支持"
+      ]
+    },
+    "v1.0.0": {
+      "date": "2025-06-27",
+      "changes": [
+        "实现用户认证系统",
+        "实现事件CRUD操作",
+        "支持事件分类和搜索",
+        "添加热点事件功能",
+        "实现浏览次数统计",
+        "添加管理员用户管理功能"
+      ]
+    }
+  },
+  "contact": {
+    "email": "dev@easypeek.com",
+    "github": "https://github.com/EasyPeek",
+    "issues": "https://github.com/EasyPeek/issues"
+  }
+}
