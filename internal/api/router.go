@@ -21,7 +21,7 @@ func SetupRoutes() *gin.Engine {
 
 	// initialize handler
 	userHandler := NewUserHandler()
-	// newsHandler := NewNewsHandler()
+	newsHandler := NewNewsHandler()
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")
@@ -52,6 +52,17 @@ func SetupRoutes() *gin.Engine {
 			admin.GET("/users", userHandler.GetUsers)
 			admin.GET("/users/:id", userHandler.GetUser)
 			admin.DELETE("/users/:id", userHandler.DeleteUser)
+		}
+
+		// news routes
+		news := v1.Group("/news")
+		{
+			news.POST("", middleware.AuthMiddleware(), newsHandler.CreateNews)
+			news.GET("/:id", newsHandler.GetNewsByID)
+			news.GET("", newsHandler.GetAllNews)
+			news.PUT("/:id", middleware.AuthMiddleware(), newsHandler.UpdateNews)
+			news.DELETE("/:id", middleware.AuthMiddleware(), newsHandler.DeleteNews)
+			news.GET("/search", newsHandler.SearchNews)
 		}
 	}
 

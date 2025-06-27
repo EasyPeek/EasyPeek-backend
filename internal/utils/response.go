@@ -29,6 +29,13 @@ func Success(c *gin.Context, data interface{}) {
 		Data:    data,
 	})
 }
+func SuccessCreated(c *gin.Context, data interface{}) {
+	c.JSON(http.StatusCreated, Response{
+		Code:    http.StatusCreated,     // 返回 201 Created 状态码
+		Message: "created successfully", // 提示信息更改为创建成功
+		Data:    data,
+	})
+}
 
 // Error
 func Error(c *gin.Context, code int, message string) {
