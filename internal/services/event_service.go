@@ -127,17 +127,17 @@ func (s *EventService) ViewEvent(id uint) (*models.EventResponse, error) {
 	err := s.db.Model(&models.Event{}).
 		Where("id = ?", id).
 		UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// 自动重新计算热度值
 	_, err = s.CalculateHotness(id, nil)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// 重新获取更新后的事件数据
 	if err := s.db.First(&event, id).Error; err != nil {
 		return nil, err
@@ -710,11 +710,11 @@ func (s *EventService) LikeEvent(eventID uint, userID uint) error {
 	err := s.db.Model(&models.Event{}).
 		Where("id = ?", eventID).
 		UpdateColumn("like_count", gorm.Expr("like_count + 1")).Error
-	
+
 	if err != nil {
 		return err
 	}
-	
+
 	// 自动重新计算热度值
 	_, err = s.CalculateHotness(eventID, nil)
 	return err
@@ -727,11 +727,11 @@ func (s *EventService) UnlikeEvent(eventID uint, userID uint) error {
 	err := s.db.Model(&models.Event{}).
 		Where("id = ? AND like_count > 0", eventID).
 		UpdateColumn("like_count", gorm.Expr("like_count - 1")).Error
-	
+
 	if err != nil {
 		return err
 	}
-	
+
 	// 自动重新计算热度值
 	_, err = s.CalculateHotness(eventID, nil)
 	return err
@@ -742,11 +742,11 @@ func (s *EventService) IncrementCommentCount(eventID uint) error {
 	err := s.db.Model(&models.Event{}).
 		Where("id = ?", eventID).
 		UpdateColumn("comment_count", gorm.Expr("comment_count + 1")).Error
-	
+
 	if err != nil {
 		return err
 	}
-	
+
 	// 自动重新计算热度值
 	_, err = s.CalculateHotness(eventID, nil)
 	return err
@@ -757,11 +757,11 @@ func (s *EventService) IncrementShareCount(eventID uint) error {
 	err := s.db.Model(&models.Event{}).
 		Where("id = ?", eventID).
 		UpdateColumn("share_count", gorm.Expr("share_count + 1")).Error
-	
+
 	if err != nil {
 		return err
 	}
-	
+
 	// 自动重新计算热度值
 	_, err = s.CalculateHotness(eventID, nil)
 	return err
