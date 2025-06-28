@@ -22,6 +22,7 @@ func SetupRoutes() *gin.Engine {
 	// initialize handler
 	userHandler := NewUserHandler()
 	eventHandler := NewEventHandler()
+	rssHandler := NewRSSHandler()
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")
@@ -85,6 +86,30 @@ func SetupRoutes() *gin.Engine {
 			// TODO: 添加系统权限中间件
 			{
 				systemEvents.PUT("/:id/hotness", eventHandler.UpdateEventHotness)
+			}
+		}
+
+		// RSS routes
+		rss := v1.Group("/rss")
+		{
+			// 公开路由
+			rss.GET("/news", rssHandler.GetNews)
+			rss.GET("/news/hot", rssHandler.GetHotNews)
+			rss.GET("/news/latest", rssHandler.GetLatestNews)
+			rss.GET("/news/category/:category", rssHandler.GetNewsByCategory)
+			rss.GET("/news/:id", rssHandler.GetNewsItem)
+
+			// 管理员路由
+			adminRSS := rss.Group("")
+			adminRSS.Use(middleware.AuthMiddleware())
+			adminRSS.Use(middleware.AdminMiddleware())
+			{
+				adminRSS.GET("/sources", rssHandler.GetRSSSources)
+				adminRSS.POST("/sources", rssHandler.CreateRSSSource)
+				adminRSS.PUT("/sources/:id", rssHandler.UpdateRSSSource)
+				adminRSS.DELETE("/sources/:id", rssHandler.DeleteRSSSource)
+				adminRSS.POST("/sources/:id/fetch", rssHandler.FetchRSSFeed)
+				adminRSS.POST("/fetch-all", rssHandler.FetchAllRSSFeeds)
 			}
 		}
 
