@@ -56,7 +56,7 @@ func (h *EventHandler) GetEvents(c *gin.Context) {
 
 // GetEvent 根据ID获取事件
 // @Summary 根据ID获取事件
-// @Description 根据ID获取单个事件详情
+// @Description 根据ID获取单个事件详情（会增加浏览量并更新热度）
 // @Tags events
 // @Produce json
 // @Param id path int true "事件ID"
@@ -73,7 +73,7 @@ func (h *EventHandler) GetEvent(c *gin.Context) {
 		return
 	}
 
-	event, err := h.eventService.GetEventByID(uint(id))
+	event, err := h.eventService.ViewEvent(uint(id))
 	if err != nil {
 		if err.Error() == "event not found" {
 			utils.NotFound(c, "Event not found")
@@ -504,4 +504,150 @@ func (h *EventHandler) UpdateEventHotness(c *gin.Context) {
 	} else {
 		utils.BadRequest(c, "Either provide hotness_score or set auto_calculate to true")
 	}
+}
+
+// LikeEvent 点赞或取消点赞事件
+// @Summary 点赞或取消点赞事件
+// @Description 用户点赞或取消点赞事件
+// @Tags events
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path int true "事件ID"
+// @Param request body models.LikeActionRequest true "点赞操作请求"
+// @Success 200 {object} utils.Response
+// @Failure 400 {object} utils.Response
+// @Failure 401 {object} utils.Response
+// @Failure 404 {object} utils.Response
+// @Failure 500 {object} utils.Response
+// @Router /api/v1/events/{id}/like [post]
+func (h *EventHandler) LikeEvent(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "Invalid event ID")
+		return
+	}
+
+	var req models.LikeActionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Invalid request body")
+		return
+	}
+
+	// 获取用户ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.Unauthorized(c, "User not found")
+		return
+	}
+
+	switch req.Action {
+	case "like":
+		err = h.eventService.LikeEvent(uint(id), userID.(uint))
+		if err != nil {
+			utils.InternalServerError(c, "Failed to like event")
+			return
+		}
+		utils.Success(c, gin.H{"message": "Event liked successfully"})
+	case "unlike":
+		err = h.eventService.UnlikeEvent(uint(id), userID.(uint))
+		if err != nil {
+			utils.InternalServerError(c, "Failed to unlike event")
+			return
+		}
+		utils.Success(c, gin.H{"message": "Event unliked successfully"})
+	default:
+		utils.BadRequest(c, "Invalid action. Use 'like' or 'unlike'")
+	}
+}
+
+// ShareEvent 分享事件
+// @Summary 分享事件
+// @Description 记录事件分享，增加分享计数
+// @Tags events
+// @Produce json
+// @Param id path int true "事件ID"
+// @Success 200 {object} utils.Response
+// @Failure 400 {object} utils.Response
+// @Failure 500 {object} utils.Response
+// @Router /api/v1/events/{id}/share [post]
+func (h *EventHandler) ShareEvent(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "Invalid event ID")
+		return
+	}
+
+	err = h.eventService.IncrementShareCount(uint(id))
+	if err != nil {
+		utils.InternalServerError(c, "Failed to record share")
+		return
+	}
+
+	utils.Success(c, gin.H{"message": "Share recorded successfully"})
+}
+
+// AddComment 添加评论
+// @Summary 添加评论
+// @Description 为事件添加评论，增加评论计数
+// @Tags events
+// @Security BearerAuth
+// @Produce json
+// @Param id path int true "事件ID"
+// @Success 200 {object} utils.Response
+// @Failure 400 {object} utils.Response
+// @Failure 401 {object} utils.Response
+// @Failure 500 {object} utils.Response
+// @Router /api/v1/events/{id}/comment [post]
+func (h *EventHandler) AddComment(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "Invalid event ID")
+		return
+	}
+
+	// 这里简化处理，只增加评论计数
+	// 实际应用中应该保存评论内容到评论表
+	err = h.eventService.IncrementCommentCount(uint(id))
+	if err != nil {
+		utils.InternalServerError(c, "Failed to add comment")
+		return
+	}
+
+	utils.Success(c, gin.H{"message": "Comment added successfully"})
+}
+
+// GetEventStats 获取事件统计信息
+// @Summary 获取事件统计信息
+// @Description 获取事件的互动统计信息（浏览、点赞、评论、分享、热度）
+// @Tags events
+// @Produce json
+// @Param id path int true "事件ID"
+// @Success 200 {object} utils.Response{data=models.InteractionStatsResponse}
+// @Failure 400 {object} utils.Response
+// @Failure 404 {object} utils.Response
+// @Failure 500 {object} utils.Response
+// @Router /api/v1/events/{id}/stats [get]
+func (h *EventHandler) GetEventStats(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "Invalid event ID")
+		return
+	}
+
+	stats, err := h.eventService.GetEventStats(uint(id))
+	if err != nil {
+		if err.Error() == "record not found" {
+			utils.NotFound(c, "Event not found")
+			return
+		}
+		utils.InternalServerError(c, "Failed to get event stats")
+		return
+	}
+
+	utils.Success(c, stats)
 }

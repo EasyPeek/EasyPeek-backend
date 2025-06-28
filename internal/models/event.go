@@ -28,6 +28,9 @@ type Event struct {
 
 	// 统计字段
 	ViewCount    int64   `json:"view_count" gorm:"default:0"`          // 浏览次数
+	LikeCount    int64   `json:"like_count" gorm:"default:0"`          // 点赞数
+	CommentCount int64   `json:"comment_count" gorm:"default:0"`       // 评论数
+	ShareCount   int64   `json:"share_count" gorm:"default:0"`         // 分享数
 	HotnessScore float64 `json:"hotness_score" gorm:"default:0;index"` // 事件热度分值
 }
 
@@ -49,6 +52,9 @@ type EventResponse struct {
 	Author       string    `json:"author,omitempty"`
 	RelatedLinks string    `json:"related_links,omitempty"`
 	ViewCount    int64     `json:"view_count"`
+	LikeCount    int64     `json:"like_count"`
+	CommentCount int64     `json:"comment_count"`
+	ShareCount   int64     `json:"share_count"`
 	HotnessScore float64   `json:"hotness_score"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
@@ -124,17 +130,21 @@ type TrendingEventResponse struct {
 
 // HotnessFactors 热度计算因子
 type HotnessFactors struct {
-	ViewWeight        float64 `json:"view_weight"`
-	TimeWeight        float64 `json:"time_weight"`
-	InteractionWeight float64 `json:"interaction_weight"`
+	ViewWeight    float64 `json:"view_weight"`    // 浏览量权重
+	LikeWeight    float64 `json:"like_weight"`    // 点赞权重
+	CommentWeight float64 `json:"comment_weight"` // 评论权重
+	ShareWeight   float64 `json:"share_weight"`   // 分享权重
+	TimeWeight    float64 `json:"time_weight"`    // 时间因素权重
 }
 
 // CalculationDetails 热度计算详情
 type CalculationDetails struct {
-	ViewScore        float64 `json:"view_score"`
-	TimeScore        float64 `json:"time_score"`
-	InteractionScore float64 `json:"interaction_score"`
-	FinalScore       float64 `json:"final_score"`
+	ViewScore    float64 `json:"view_score"`
+	LikeScore    float64 `json:"like_score"`
+	CommentScore float64 `json:"comment_score"`
+	ShareScore   float64 `json:"share_score"`
+	TimeScore    float64 `json:"time_score"`
+	FinalScore   float64 `json:"final_score"`
 }
 
 // HotnessCalculationResult 热度计算结果
@@ -157,4 +167,19 @@ type UpdateHotnessRequest struct {
 	HotnessScore  *float64        `json:"hotness_score" binding:"omitempty,min=0,max=10"`
 	AutoCalculate *bool           `json:"auto_calculate"`
 	Factors       *HotnessFactors `json:"factors"`
+}
+
+// LikeActionRequest 点赞操作请求
+type LikeActionRequest struct {
+	Action string `json:"action" binding:"required,oneof=like unlike"` // like or unlike
+}
+
+// InteractionStatsResponse 交互统计响应
+type InteractionStatsResponse struct {
+	EventID      uint    `json:"event_id"`
+	ViewCount    int64   `json:"view_count"`
+	LikeCount    int64   `json:"like_count"`
+	CommentCount int64   `json:"comment_count"`
+	ShareCount   int64   `json:"share_count"`
+	HotnessScore float64 `json:"hotness_score"`
 }

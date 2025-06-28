@@ -55,8 +55,10 @@ func SetupRoutes() *gin.Engine {
 			events.GET("/category/:category", eventHandler.GetEventsByCategory)
 			events.GET("/tags", eventHandler.GetPopularTags)
 			events.GET("/:id", eventHandler.GetEvent)
+			events.GET("/:id/stats", eventHandler.GetEventStats)
 			events.GET("/status/:status", eventHandler.GetEventsByStatus)
 			events.POST("/:id/view", eventHandler.IncrementViewCount)
+			events.POST("/:id/share", eventHandler.ShareEvent)
 
 			// 需要身份验证的路由
 			authEvents := events.Group("")
@@ -65,6 +67,8 @@ func SetupRoutes() *gin.Engine {
 				authEvents.POST("", eventHandler.CreateEvent)
 				authEvents.PUT("/:id", eventHandler.UpdateEvent)
 				authEvents.DELETE("/:id", eventHandler.DeleteEvent)
+				authEvents.POST("/:id/like", eventHandler.LikeEvent)
+				authEvents.POST("/:id/comment", eventHandler.AddComment)
 			}
 
 			// 管理员专用路由
