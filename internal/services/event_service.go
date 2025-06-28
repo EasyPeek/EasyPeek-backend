@@ -113,6 +113,40 @@ func (s *EventService) GetEventByID(id uint) (*models.EventResponse, error) {
 	return &response, nil
 }
 
+// ViewEvent 浏览事件（增加浏览量并重新计算热度）
+func (s *EventService) ViewEvent(id uint) (*models.EventResponse, error) {
+	var event models.Event
+	if err := s.db.First(&event, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("event not found")
+		}
+		return nil, err
+	}
+
+	// 增加浏览量
+	err := s.db.Model(&models.Event{}).
+		Where("id = ?", id).
+		UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	// 自动重新计算热度值
+	_, err = s.CalculateHotness(id, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// 重新获取更新后的事件数据
+	if err := s.db.First(&event, id).Error; err != nil {
+		return nil, err
+	}
+
+	response := convertToEventResponse(&event)
+	return &response, nil
+}
+
 // CreateEvent 创建事件
 func (s *EventService) CreateEvent(req *models.CreateEventRequest) (*models.EventResponse, error) {
 	// 检查时间
@@ -280,6 +314,9 @@ func convertToEventResponse(event *models.Event) models.EventResponse {
 		Author:       event.Author,
 		RelatedLinks: event.RelatedLinks,
 		ViewCount:    event.ViewCount,
+		LikeCount:    event.LikeCount,
+		CommentCount: event.CommentCount,
+		ShareCount:   event.ShareCount,
 		HotnessScore: event.HotnessScore,
 		CreatedAt:    event.CreatedAt,
 		UpdatedAt:    event.UpdatedAt,
@@ -538,21 +575,27 @@ func (s *EventService) CalculateHotness(id uint, factors *models.HotnessFactors)
 	// 设置默认权重
 	if factors == nil {
 		factors = &models.HotnessFactors{
-			ViewWeight:        0.4,
-			TimeWeight:        0.3,
-			InteractionWeight: 0.3,
+			ViewWeight:    0.2,
+			LikeWeight:    0.3,
+			CommentWeight: 0.25,
+			ShareWeight:   0.15,
+			TimeWeight:    0.1,
 		}
 	}
 
 	// 计算各项分值
 	viewScore := calculateViewScore(event.ViewCount)
+	likeScore := calculateLikeScore(event.LikeCount)
+	commentScore := calculateCommentScore(event.CommentCount)
+	shareScore := calculateShareScore(event.ShareCount)
 	timeScore := calculateTimeScore(event.CreatedAt)
-	interactionScore := calculateInteractionScore(event.ViewCount) // 简化，用浏览量代替交互
 
 	// 计算最终分值
 	finalScore := viewScore*factors.ViewWeight +
-		timeScore*factors.TimeWeight +
-		interactionScore*factors.InteractionWeight
+		likeScore*factors.LikeWeight +
+		commentScore*factors.CommentWeight +
+		shareScore*factors.ShareWeight +
+		timeScore*factors.TimeWeight
 
 	// 限制在0-10范围内
 	if finalScore > 10 {
@@ -575,10 +618,12 @@ func (s *EventService) CalculateHotness(id uint, factors *models.HotnessFactors)
 		HotnessScore:  finalScore,
 		PreviousScore: previousScore,
 		CalculationDetails: models.CalculationDetails{
-			ViewScore:        viewScore,
-			TimeScore:        timeScore,
-			InteractionScore: interactionScore,
-			FinalScore:       finalScore,
+			ViewScore:    viewScore,
+			LikeScore:    likeScore,
+			CommentScore: commentScore,
+			ShareScore:   shareScore,
+			TimeScore:    timeScore,
+			FinalScore:   finalScore,
 		},
 		UpdatedAt: event.UpdatedAt,
 	}, nil
@@ -616,12 +661,125 @@ func calculateTimeScore(createdAt time.Time) float64 {
 	}
 }
 
-// 辅助函数：计算交互分值
-func calculateInteractionScore(viewCount int64) float64 {
-	// 简化计算，实际应该包括评论、分享等交互数据
-	score := float64(viewCount) / 500.0 * 6.0
+// 辅助函数：计算点赞分值
+func calculateLikeScore(likeCount int64) float64 {
+	// 点赞分值计算：对数增长，最高10分
+	if likeCount == 0 {
+		return 0
+	}
+	// 每100个点赞算1分，最高10分
+	score := float64(likeCount) / 100.0
 	if score > 10 {
 		score = 10
 	}
 	return score
+}
+
+// 辅助函数：计算评论分值
+func calculateCommentScore(commentCount int64) float64 {
+	// 评论分值计算：评论比点赞更有价值
+	if commentCount == 0 {
+		return 0
+	}
+	// 每10个评论算1分，最高10分
+	score := float64(commentCount) / 10.0
+	if score > 10 {
+		score = 10
+	}
+	return score
+}
+
+// 辅助函数：计算分享分值
+func calculateShareScore(shareCount int64) float64 {
+	// 分享分值计算：分享是最有价值的互动
+	if shareCount == 0 {
+		return 0
+	}
+	// 每5个分享算1分，最高10分
+	score := float64(shareCount) / 5.0
+	if score > 10 {
+		score = 10
+	}
+	return score
+}
+
+// LikeEvent 点赞事件
+func (s *EventService) LikeEvent(eventID uint, userID uint) error {
+	// 这里可以实现点赞逻辑，比如检查用户是否已经点赞过
+	// 为简化，这里直接增加点赞数
+	err := s.db.Model(&models.Event{}).
+		Where("id = ?", eventID).
+		UpdateColumn("like_count", gorm.Expr("like_count + 1")).Error
+
+	if err != nil {
+		return err
+	}
+
+	// 自动重新计算热度值
+	_, err = s.CalculateHotness(eventID, nil)
+	return err
+}
+
+// UnlikeEvent 取消点赞事件
+func (s *EventService) UnlikeEvent(eventID uint, userID uint) error {
+	// 这里可以实现取消点赞逻辑
+	// 为简化，这里直接减少点赞数（确保不会小于0）
+	err := s.db.Model(&models.Event{}).
+		Where("id = ? AND like_count > 0", eventID).
+		UpdateColumn("like_count", gorm.Expr("like_count - 1")).Error
+
+	if err != nil {
+		return err
+	}
+
+	// 自动重新计算热度值
+	_, err = s.CalculateHotness(eventID, nil)
+	return err
+}
+
+// IncrementCommentCount 增加评论数
+func (s *EventService) IncrementCommentCount(eventID uint) error {
+	err := s.db.Model(&models.Event{}).
+		Where("id = ?", eventID).
+		UpdateColumn("comment_count", gorm.Expr("comment_count + 1")).Error
+
+	if err != nil {
+		return err
+	}
+
+	// 自动重新计算热度值
+	_, err = s.CalculateHotness(eventID, nil)
+	return err
+}
+
+// IncrementShareCount 增加分享数
+func (s *EventService) IncrementShareCount(eventID uint) error {
+	err := s.db.Model(&models.Event{}).
+		Where("id = ?", eventID).
+		UpdateColumn("share_count", gorm.Expr("share_count + 1")).Error
+
+	if err != nil {
+		return err
+	}
+
+	// 自动重新计算热度值
+	_, err = s.CalculateHotness(eventID, nil)
+	return err
+}
+
+// GetEventStats 获取事件统计信息
+func (s *EventService) GetEventStats(eventID uint) (*models.InteractionStatsResponse, error) {
+	var event models.Event
+	if err := s.db.First(&event, eventID).Error; err != nil {
+		return nil, err
+	}
+
+	return &models.InteractionStatsResponse{
+		EventID:      event.ID,
+		ViewCount:    event.ViewCount,
+		LikeCount:    event.LikeCount,
+		CommentCount: event.CommentCount,
+		ShareCount:   event.ShareCount,
+		HotnessScore: event.HotnessScore,
+	}, nil
 }
