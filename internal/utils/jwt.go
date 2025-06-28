@@ -38,9 +38,7 @@ func GenerateToken(userID uint, username string, role string) (string, error) {
 // ParseToken 解析并验证token
 func ParseToken(tokenString string) (*Claims, error) {
 	// 移除Bearer前缀
-	if strings.HasPrefix(tokenString, "Bearer ") {
-		tokenString = strings.TrimPrefix(tokenString, "Bearer ")
-	}
+	tokenString = strings.TrimPrefix(tokenString, "Bearer ")
 
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {

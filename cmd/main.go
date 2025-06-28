@@ -30,10 +30,11 @@ func main() {
 
 	// execute database migration
 	if err := database.Migrate(
-		&models.User{}, 
-		&models.Event{}, 
-		&models.RSSSource{}, 
-		&models.NewsItem{},
+		&models.User{},
+
+		&models.Event{},
+		&models.RSSSource{},
+		&models.News{},
 	); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
@@ -65,7 +66,7 @@ func main() {
 
 		log.Println("Shutting down server...")
 		rssScheduler.Stop()
-		
+
 		if err := server.Close(); err != nil {
 			log.Printf("Server shutdown error: %v", err)
 		}
