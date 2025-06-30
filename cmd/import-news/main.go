@@ -57,7 +57,8 @@ func main() {
 
 	// 1. 检查Docker容器状态
 	fmt.Println("📋 检查Docker容器状态...")
-	checkDockerContainer()
+	containerName := "postgres_easypeak"
+	checkDockerContainer(containerName)
 
 	// 2. 初始化配置
 	cfg := &config.Config{
@@ -65,8 +66,8 @@ func main() {
 			Host:     getEnv("DB_HOST", "localhost"),
 			Port:     5432,
 			User:     getEnv("DB_USER", "postgres"),
-			Password: getEnv("DB_PASSWORD", "password"),
-			DBName:   getEnv("DB_NAME", "easypeek"),
+			Password: getEnv("DB_PASSWORD", "PostgresPassword"),
+			DBName:   getEnv("DB_NAME", "easypeekdb"),
 			SSLMode:  getEnv("DB_SSLMODE", "disable"),
 		},
 	}
@@ -98,9 +99,7 @@ func main() {
 		fmt.Println("可用数据文件:")
 		fmt.Println("1. converted_news_data.json (推荐)")
 		fmt.Println("2. news_converted.json")
-		fmt.Println("3. localization.json (需要先转换)")
-		fmt.Println("\n请先运行数据转换:")
-		fmt.Println("python scripts/convert_localization_to_news.py")
+		fmt.Println("3. 请确保文件位于项目根目录下")
 		os.Exit(1)
 	}
 
@@ -206,9 +205,8 @@ func main() {
 		}
 
 		fmt.Println("\n✨ 导入成功！现在可以:")
-		fmt.Println("1. 运行验证: verify.bat")
-		fmt.Println("2. 启动服务: go run cmd/main.go")
-		fmt.Println("3. 查看数据: docker exec -it postgres_easypeak psql -U postgres -d easypeek")
+		fmt.Println("1. 启动服务: go run cmd/main.go")
+		fmt.Println("2. 查看数据: docker exec -it postgres_easypeak psql -U postgres -d easypeekdb")
 	} else {
 		fmt.Println("\n❌ 没有成功导入任何数据，请检查:")
 		fmt.Println("1. 数据文件格式是否正确")
@@ -305,10 +303,8 @@ func truncateString(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
-// checkDockerContainer 检查postgres_easypeak容器状态
-func checkDockerContainer() {
-	containerName := "postgres_easypeak"
-
+// checkDockerContainer 检查指定容器状态
+func checkDockerContainer(containerName string) {
 	cmd := exec.Command("docker", "ps", "--filter", fmt.Sprintf("name=%s", containerName), "--format", "{{.Names}}")
 	output, err := cmd.Output()
 
