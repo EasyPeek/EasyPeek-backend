@@ -23,6 +23,7 @@ func SetupRoutes() *gin.Engine {
 	userHandler := NewUserHandler()
 	eventHandler := NewEventHandler()
 	rssHandler := NewRSSHandler()
+	newsHandler := NewNewsHandler() // 添加新闻处理器
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")
@@ -121,6 +122,24 @@ func SetupRoutes() *gin.Engine {
 			admin.GET("/users", userHandler.GetUsers)
 			admin.GET("/users/:id", userHandler.GetUser)
 			admin.DELETE("/users/:id", userHandler.DeleteUser)
+		}
+
+		// news routes
+		news := v1.Group("/news")
+		{
+			// 公开路由
+			news.GET("", newsHandler.GetAllNews)
+			news.GET("/:id", newsHandler.GetNewsByID)
+			news.GET("/event/:eventId", newsHandler.GetNewsByEventID) // 根据事件ID获取相关新闻
+
+			// 需要身份验证的路由
+			authNews := news.Group("")
+			authNews.Use(middleware.AuthMiddleware())
+			{
+				authNews.POST("", newsHandler.CreateNews)
+				authNews.PUT("/:id", newsHandler.UpdateNews)
+				authNews.DELETE("/:id", newsHandler.DeleteNews)
+			}
 		}
 	}
 
