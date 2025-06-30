@@ -6,7 +6,6 @@
 -- ================================================
 
 -- 1. 创建新闻表
--- 1. 创建新闻表
 CREATE TABLE IF NOT EXISTS news (
     id SERIAL PRIMARY KEY,
     title VARCHAR(500) NOT NULL,
@@ -16,7 +15,7 @@ CREATE TABLE IF NOT EXISTS news (
     source VARCHAR(100),
     category VARCHAR(100),
     published_at TIMESTAMP NOT NULL,
-    created_by INTEGER NULL REFERENCES users(id),
+    created_by INTEGER NULL, -- 移除外键引用，避免循环依赖
     is_active BOOLEAN DEFAULT true,
     
     -- 新闻媒体字段
@@ -42,7 +41,7 @@ CREATE TABLE IF NOT EXISTS news (
     deleted_at TIMESTAMP NULL
 );
 
--- 为新闻表创建索引
+-- 为新闻表创建索引（在表创建之后）
 CREATE INDEX IF NOT EXISTS idx_news_title ON news(title);
 CREATE INDEX IF NOT EXISTS idx_news_category ON news(category);
 CREATE INDEX IF NOT EXISTS idx_news_published_at ON news(published_at);

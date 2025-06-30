@@ -1,23 +1,37 @@
 @echo off
-echo EasyPeek Database Migration Tool
+echo ================================================
+echo EasyPeek 数据库迁移工具 (postgres_easypeak)
+echo ================================================
 echo.
 
 if "%1"=="" (
     echo Usage: migrate.bat ^<sql_file^>
     echo.
     echo Examples:
-    echo   migrate.bat migrations/001_create_news_tables.sql
-    echo   migrate.bat migrations/insert_sample_news.sql
+    echo   migrate.bat migrations/simple_init.sql
     echo.
-    echo Available SQL files:
+    echo 可用的迁移文件:
     dir /b migrations\*.sql 2>nul
+    echo.
+    pause
     exit /b 1
 )
 
-echo Executing: %1
-echo.
+echo 检查Docker容器状态...
+docker ps | findstr postgres_easypeak >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+    echo ❌ 容器 postgres_easypeak 未运行
+    echo 启动命令: docker start postgres_easypeak
+    echo 或运行: start-postgres-easypeak.bat
+    pause
+    exit /b 1
+)
+echo ✅ 容器正在运行
 
-REM 设置数据库环境变量（可根据需要修改）
+echo.
+echo 执行迁移: %1
+
+REM 设置数据库环境变量
 set DB_HOST=localhost
 set DB_PORT=5432
 set DB_USER=postgres
@@ -30,10 +44,10 @@ go run scripts/migrate.go %1
 
 if %ERRORLEVEL% == 0 (
     echo.
-    echo ✓ Migration completed successfully!
+    echo ✅ 迁移完成成功！
 ) else (
     echo.
-    echo ✗ Migration failed with error code %ERRORLEVEL%
+    echo ❌ 迁移失败，错误代码 %ERRORLEVEL%
 )
 
 pause

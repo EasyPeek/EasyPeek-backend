@@ -3,9 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/EasyPeek/EasyPeek-backend/internal/config"
@@ -51,9 +52,14 @@ type NewsItem struct {
 
 func main() {
 	fmt.Println("🔄 EasyPeek 新闻数据导入工具")
+	fmt.Println("容器: postgres_easypeak")
 	fmt.Println("====================================")
 
-	// 1. 初始化配置 (使用与test-news相同的方式)
+	// 1. 检查Docker容器状态
+	fmt.Println("📋 检查Docker容器状态...")
+	checkDockerContainer()
+
+	// 2. 初始化配置
 	cfg := &config.Config{
 		Database: config.DatabaseConfig{
 			Host:     getEnv("DB_HOST", "localhost"),
@@ -65,23 +71,42 @@ func main() {
 		},
 	}
 
-	// 2. 初始化数据库连接
+	fmt.Printf("🔗 数据库连接: %s@%s:%d/%s\n",
+		cfg.Database.User, cfg.Database.Host, cfg.Database.Port, cfg.Database.DBName)
+
+	// 3. 初始化数据库连接
 	fmt.Println("🔌 连接数据库...")
 	err := database.Initialize(cfg)
 	if err != nil {
+		fmt.Printf("❌ 数据库连接失败: %v\n", err)
+		fmt.Println("\n故障排除建议:")
+		fmt.Println("1. 确保容器运行: docker start postgres_easypeak")
+		fmt.Println("2. 确保数据库存在: docker exec postgres_easypeak psql -U postgres -c \"CREATE DATABASE easypeek;\"")
+		fmt.Println("3. 运行迁移: migrate.bat migrations/simple_init.sql")
 		log.Fatal("❌ 数据库连接失败:", err)
 	}
 	fmt.Println("✅ 数据库连接成功")
 
-	// 3. 检查转换后的数据文件是否存在
-	jsonFile := "converted_news_data.json"
-	if _, err := os.Stat(jsonFile); os.IsNotExist(err) {
-		log.Fatalf("❌ 找不到数据文件 %s\n请先运行: python scripts\\convert_localization_to_news.py", jsonFile)
+	// 4. 检查news表是否存在
+	fmt.Println("📊 检查数据库表结构...")
+	checkTableExists()
+
+	// 5. 检查转换后的数据文件
+	jsonFile := findDataFile()
+	if jsonFile == "" {
+		fmt.Println("\n❌ 找不到数据文件")
+		fmt.Println("可用数据文件:")
+		fmt.Println("1. converted_news_data.json (推荐)")
+		fmt.Println("2. news_converted.json")
+		fmt.Println("3. localization.json (需要先转换)")
+		fmt.Println("\n请先运行数据转换:")
+		fmt.Println("python scripts/convert_localization_to_news.py")
+		os.Exit(1)
 	}
 
 	// 4. 读取并解析JSON数据
 	fmt.Printf("📖 读取数据文件: %s\n", jsonFile)
-	data, err := ioutil.ReadFile(jsonFile)
+	data, err := os.ReadFile(jsonFile)
 	if err != nil {
 		log.Fatalf("❌ 读取文件失败: %v", err)
 	}
@@ -143,7 +168,9 @@ func main() {
 	fmt.Println("\n====================================")
 	fmt.Printf("🎉 导入完成！用时: %.2f 秒\n", duration.Seconds())
 	fmt.Printf("✅ 成功导入: %d 条\n", successCount)
-	fmt.Printf("❌ 失败: %d 条\n", errorCount)
+	if errorCount > 0 {
+		fmt.Printf("❌ 失败: %d 条\n", errorCount)
+	}
 	fmt.Printf("📊 总计: %d 条\n", len(convertedData.NewsItems))
 
 	if successCount > 0 {
@@ -153,53 +180,93 @@ func main() {
 		database.DB.Model(&models.News{}).Count(&totalNews)
 		fmt.Printf("📰 数据库中总新闻数量: %d\n", totalNews)
 
-		// 显示最新导入的几条新闻
-		var recentNews []models.News
-		database.DB.Order("created_at DESC").Limit(3).Find(&recentNews)
-		fmt.Println("\n📋 最新导入的新闻:")
-		for i, news := range recentNews {
-			fmt.Printf("   %d. [%s] %s\n", i+1, news.Category, truncateString(news.Title, 50))
+		// 显示最新导入的新闻
+		var latestNews []models.News
+		database.DB.Order("created_at DESC").Limit(3).Find(&latestNews)
+
+		fmt.Println("\n📰 最新导入的新闻:")
+		for i, news := range latestNews {
+			fmt.Printf("  %d. [%s] %s\n", i+1, news.Category, news.Title)
 		}
 
-		fmt.Println("\n✅ 数据导入成功！可以启动后端服务查看新闻数据。")
+		// 按分类统计
+		fmt.Println("\n📊 分类统计:")
+		var categoryStats []struct {
+			Category string
+			Count    int64
+		}
+		database.DB.Model(&models.News{}).
+			Select("category, COUNT(*) as count").
+			Group("category").
+			Order("count DESC").
+			Scan(&categoryStats)
+
+		for _, stat := range categoryStats {
+			fmt.Printf("  %s: %d条\n", stat.Category, stat.Count)
+		}
+
+		fmt.Println("\n✨ 导入成功！现在可以:")
+		fmt.Println("1. 运行验证: verify.bat")
+		fmt.Println("2. 启动服务: go run cmd/main.go")
+		fmt.Println("3. 查看数据: docker exec -it postgres_easypeak psql -U postgres -d easypeek")
 	} else {
-		fmt.Println("\n❌ 没有成功导入任何数据，请检查错误信息。")
+		fmt.Println("\n❌ 没有成功导入任何数据，请检查:")
+		fmt.Println("1. 数据文件格式是否正确")
+		fmt.Println("2. 数据库连接是否正常")
+		fmt.Println("3. 表结构是否已创建")
 	}
 }
 
 // convertToNewsModel 将JSON数据转换为models.News结构
 func convertToNewsModel(item NewsItem) (models.News, error) {
 	// 解析发布时间
-	publishedAt, err := time.Parse("2006-01-02 15:04:05", item.PublishedAt)
-	if err != nil {
-		return models.News{}, fmt.Errorf("解析发布时间失败: %v", err)
+	var publishedAt time.Time
+	var err error
+
+	// 尝试多种时间格式
+	timeFormats := []string{
+		"2006-01-02T15:04:05Z",
+		"2006-01-02 15:04:05",
+		"2006-01-02T15:04:05.000Z",
+		"2006-01-02T15:04:05+08:00",
 	}
 
-	// 转换SourceType
-	var sourceType models.NewsType
+	for _, format := range timeFormats {
+		publishedAt, err = time.Parse(format, item.PublishedAt)
+		if err == nil {
+			break
+		}
+	}
+
+	if err != nil {
+		// 如果都失败了，使用当前时间
+		fmt.Printf("⚠️ 解析时间 '%s' 失败，使用当前时间: %v\n", item.PublishedAt, err)
+		publishedAt = time.Now()
+	}
+
+	// 转换SourceType - 直接使用字符串，让GORM处理类型转换
+	sourceType := models.NewsTypeManual
 	if item.SourceType == "rss" {
 		sourceType = models.NewsTypeRSS
-	} else {
-		sourceType = models.NewsTypeManual
 	}
 
 	// 创建News对象
 	news := models.News{
-		Title:        item.Title,
+		Title:        truncateString(item.Title, 500),
 		Content:      item.Content,
 		Summary:      item.Summary,
 		Description:  item.Description,
-		Source:       item.Source,
-		Category:     item.Category,
+		Source:       truncateString(item.Source, 100),
+		Category:     truncateString(item.Category, 100),
 		PublishedAt:  publishedAt,
 		CreatedBy:    item.CreatedBy,
 		IsActive:     item.IsActive,
 		SourceType:   sourceType,
 		RSSSourceID:  item.RSSSourceID,
-		Link:         item.Link,
-		GUID:         item.GUID,
-		Author:       item.Author,
-		ImageURL:     item.ImageURL,
+		Link:         truncateString(item.Link, 1000),
+		GUID:         truncateString(item.GUID, 500),
+		Author:       truncateString(item.Author, 100),
+		ImageURL:     truncateString(item.ImageURL, 1000),
 		Tags:         item.Tags,
 		Language:     item.Language,
 		ViewCount:    item.ViewCount,
@@ -209,6 +276,14 @@ func convertToNewsModel(item NewsItem) (models.News, error) {
 		HotnessScore: item.HotnessScore,
 		Status:       item.Status,
 		IsProcessed:  item.IsProcessed,
+	}
+
+	// 设置默认值
+	if news.Language == "" {
+		news.Language = "zh"
+	}
+	if news.Status == "" {
+		news.Status = "published"
 	}
 
 	return news, nil
@@ -228,4 +303,62 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// checkDockerContainer 检查postgres_easypeak容器状态
+func checkDockerContainer() {
+	containerName := "postgres_easypeak"
+
+	cmd := exec.Command("docker", "ps", "--filter", fmt.Sprintf("name=%s", containerName), "--format", "{{.Names}}")
+	output, err := cmd.Output()
+
+	if err != nil || strings.TrimSpace(string(output)) == "" {
+		fmt.Printf("❌ 容器 %s 未运行\n", containerName)
+		fmt.Println("启动建议:")
+		fmt.Printf("  docker start %s\n", containerName)
+		fmt.Println("  或运行: start-postgres-easypeak.bat")
+		os.Exit(1)
+	} else {
+		fmt.Printf("✅ 容器 %s 正在运行\n", containerName)
+	}
+}
+
+// checkTableExists 检查news表是否存在
+func checkTableExists() {
+	var tableExists bool
+	err := database.DB.Raw("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'news')").Scan(&tableExists).Error
+	if err != nil {
+		fmt.Printf("❌ 检查表失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	if !tableExists {
+		fmt.Println("❌ news表不存在")
+		fmt.Println("请先运行数据库迁移:")
+		fmt.Println("  migrate.bat migrations/simple_init.sql")
+		os.Exit(1)
+	}
+
+	// 检查现有数据
+	var count int64
+	database.DB.Raw("SELECT COUNT(*) FROM news").Scan(&count)
+	fmt.Printf("✅ news表存在，当前有 %d 条记录\n", count)
+}
+
+// findDataFile 查找可用的数据文件
+func findDataFile() string {
+	possibleFiles := []string{
+		"converted_news_data.json",
+		"news_converted.json",
+		"localization_converted.json",
+	}
+
+	for _, file := range possibleFiles {
+		if _, err := os.Stat(file); err == nil {
+			fmt.Printf("📖 找到数据文件: %s\n", file)
+			return file
+		}
+	}
+
+	return ""
 }
