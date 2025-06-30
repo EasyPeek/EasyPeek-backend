@@ -257,3 +257,6 @@ LIMIT 5;
 - ✅ 保持代码结构不变（RSS字段在代码中保留）
 
 这种设计既简化了数据库操作，又保持了代码的完整性和扩展性！
+
+docker exec postgres_easypeak psql -U postgres -c "ALTER USER postgres PASSWORD 'password';"
+docker exec postgres_easypeak psql -U postgres -c "CREATE DATABASE easypeek;"

@@ -25,6 +25,10 @@ type CategoryStats struct {
 }
 
 func main() {
+	fmt.Println("🔍 EasyPeek 数据库验证工具")
+	fmt.Println("容器: postgres_easypeak")
+	fmt.Println("============================")
+
 	// 使用环境变量或默认配置连接数据库
 	dsn := "host=localhost user=postgres password=password dbname=easypeek port=5432 sslmode=disable TimeZone=Asia/Shanghai"
 
@@ -40,11 +44,20 @@ func main() {
 		)
 	}
 
+	fmt.Printf("🔗 连接字符串: %s\n", maskDSN(dsn))
+
 	// 连接数据库
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
+		fmt.Printf("❌ 数据库连接失败: %v\n", err)
+		fmt.Println("请确保:")
+		fmt.Println("1. 容器 postgres_easypeak 正在运行")
+		fmt.Println("2. 数据库 easypeek 已创建")
+		fmt.Println("3. 运行 start-postgres-easypeak.bat 启动容器")
 		log.Fatal("Failed to connect to database:", err)
 	}
+
+	fmt.Println("✅ 数据库连接成功")
 
 	// 获取原始SQL连接
 	sqlDB, err := db.DB()
@@ -148,4 +161,15 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// 隐藏密码的连接字符串
+func maskDSN(dsn string) string {
+	parts := strings.Split(dsn, " ")
+	for i, part := range parts {
+		if strings.HasPrefix(part, "password=") {
+			parts[i] = "password=***"
+		}
+	}
+	return strings.Join(parts, " ")
 }
