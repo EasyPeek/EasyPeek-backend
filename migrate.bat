@@ -35,8 +35,8 @@ REM 设置数据库环境变量
 set DB_HOST=localhost
 set DB_PORT=5432
 set DB_USER=postgres
-set DB_PASSWORD=password
-set DB_NAME=easypeek
+set DB_PASSWORD=PostgresPassword
+set DB_NAME=easypeekdb
 set DB_SSLMODE=disable
 
 REM 执行Go脚本

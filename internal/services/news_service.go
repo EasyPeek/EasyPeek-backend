@@ -31,15 +31,16 @@ func (s *NewsService) CreateNews(req *models.NewsCreateRequest, createdByUserID 
 
 	// 构造 News 模型实例
 	news := &models.News{
-		Title:       req.Title,
-		Content:     req.Content,
-		Summary:     req.Summary,
-		Source:      req.Source,
-		Category:    req.Category,
-		PublishedAt: time.Now(),        // 默认设置为当前时间，如果请求中没有提供
-		CreatedBy:   &createdByUserID,  // 设置创建者ID指针
-		IsActive:    true,              // 默认新闻是活跃的/可见的
-		SourceType:  models.NewsTypeManual, // 手动创建的新闻
+		Title:           req.Title,
+		Content:         req.Content,
+		Summary:         req.Summary,
+		Source:          req.Source,
+		Category:        req.Category,
+		PublishedAt:     time.Now(),            // 默认设置为当前时间，如果请求中没有提供
+		CreatedBy:       &createdByUserID,      // 设置创建者ID指针
+		IsActive:        true,                  // 默认新闻是活跃的/可见的
+		SourceType:      models.NewsTypeManual, // 手动创建的新闻
+		BelongedEventID: req.BelongedEventID,   // 设置关联的事件ID
 	}
 
 	// 如果请求中提供了 PublishedAt，则使用请求的值
@@ -120,6 +121,9 @@ func (s *NewsService) UpdateNews(news *models.News, req *models.NewsUpdateReques
 	}
 	if req.IsActive != nil {
 		news.IsActive = *req.IsActive
+	}
+	if req.BelongedEventID != nil {
+		news.BelongedEventID = req.BelongedEventID
 	}
 
 	// 使用 Save 方法保存更新，GORM 会根据主键自动判断是插入还是更新
@@ -212,6 +216,41 @@ func (s *NewsService) SearchNews(query string, page, pageSize int) ([]models.New
 	// 执行带分页的搜索查询
 	if err := dbQuery.Offset(offset).Limit(pageSize).Find(&newsList).Error; err != nil {
 		return nil, 0, fmt.Errorf("failed to search news with pagination: %w", err)
+	}
+
+	return newsList, total, nil
+}
+
+// GetNewsByEventID 根据事件ID获取相关新闻列表（带分页）
+func (s *NewsService) GetNewsByEventID(eventID uint, page, pageSize int) ([]models.News, int64, error) {
+	// 检查数据库连接是否已初始化
+	if s.db == nil {
+		return nil, 0, errors.New("database connection not initialized")
+	}
+
+	var newsList []models.News
+	var total int64
+
+	// 构建查询
+	dbQuery := s.db.Model(&models.News{}).Where("belonged_event_id = ?", eventID)
+
+	// 计算符合条件的记录总数
+	if err := dbQuery.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count news for event %d: %w", eventID, err)
+	}
+
+	// 计算分页偏移量
+	offset := (page - 1) * pageSize
+	if offset < 0 {
+		offset = 0
+	}
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+
+	// 执行带分页的查询，按发布时间降序排序（最新的优先）
+	if err := dbQuery.Order("published_at DESC").Offset(offset).Limit(pageSize).Find(&newsList).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to get news for event %d: %w", eventID, err)
 	}
 
 	return newsList, total, nil
