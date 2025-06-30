@@ -1,7 +1,6 @@
 package services
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/EasyPeek/EasyPeek-backend/internal/database"
 	"github.com/EasyPeek/EasyPeek-backend/internal/models"
+	"github.com/EasyPeek/EasyPeek-backend/internal/utils"
 	"github.com/mmcdole/gofeed"
 	"gorm.io/gorm"
 )
@@ -47,7 +47,7 @@ func (s *RSSService) CreateRSSSource(req *models.CreateRSSSourceRequest) (*model
 		Category:    req.Category,
 		Language:    req.Language,
 		Description: req.Description,
-		Tags:        sliceToJSON(req.Tags),
+		Tags:        utils.SliceToJSON(req.Tags),
 		Priority:    req.Priority,
 		UpdateFreq:  req.UpdateFreq,
 		IsActive:    true,
@@ -139,13 +139,13 @@ func (s *RSSService) UpdateRSSSource(id uint, req *models.UpdateRSSSourceRequest
 		if err := s.db.Where("url = ? AND id != ?", req.URL, id).First(&existingSource).Error; err == nil {
 			return nil, errors.New("RSS source with this URL already exists")
 		}
-		
+
 		// 测试新URL是否可访问
 		_, err := s.parser.ParseURL(req.URL)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse RSS feed: %v", err)
 		}
-		
+
 		source.URL = req.URL
 	}
 	if req.Category != "" {
@@ -161,7 +161,7 @@ func (s *RSSService) UpdateRSSSource(id uint, req *models.UpdateRSSSourceRequest
 		source.Description = req.Description
 	}
 	if req.Tags != nil {
-		source.Tags = sliceToJSON(req.Tags)
+		source.Tags = utils.SliceToJSON(req.Tags)
 	}
 	if req.Priority > 0 {
 		source.Priority = req.Priority
@@ -197,12 +197,18 @@ func (s *RSSService) DeleteRSSSource(id uint) error {
 
 // FetchRSSFeed 抓取单个RSS源的内容
 func (s *RSSService) FetchRSSFeed(sourceID uint) (*models.RSSFetchStats, error) {
+	log.Printf("[RSS DEBUG] Starting to fetch RSS feed for source ID: %d", sourceID)
+	
 	var source models.RSSSource
 	if err := s.db.First(&source, sourceID).Error; err != nil {
+		log.Printf("[RSS ERROR] Failed to find RSS source %d: %v", sourceID, err)
 		return nil, err
 	}
 
+	log.Printf("[RSS DEBUG] Found RSS source: %s (URL: %s, Active: %v)", source.Name, source.URL, source.IsActive)
+
 	if !source.IsActive {
+		log.Printf("[RSS WARNING] RSS source %s is not active", source.Name)
 		return nil, errors.New("RSS source is not active")
 	}
 
@@ -214,12 +220,16 @@ func (s *RSSService) FetchRSSFeed(sourceID uint) (*models.RSSFetchStats, error) 
 	}
 
 	// 解析RSS feed
+	log.Printf("[RSS DEBUG] Parsing RSS feed from URL: %s", source.URL)
 	feed, err := s.parser.ParseURL(source.URL)
 	if err != nil {
+		log.Printf("[RSS ERROR] Failed to parse RSS feed %s: %v", source.URL, err)
 		// 增加错误计数
 		s.db.Model(&source).UpdateColumn("error_count", gorm.Expr("error_count + 1"))
 		return nil, fmt.Errorf("failed to parse RSS feed: %v", err)
 	}
+
+	log.Printf("[RSS DEBUG] Successfully parsed RSS feed, found %d items", len(feed.Items))
 
 	stats.TotalItems = len(feed.Items)
 
@@ -279,7 +289,7 @@ func (s *RSSService) FetchAllRSSFeeds() (*models.RSSFetchResult, error) {
 			})
 			continue
 		}
-		
+
 		result.Stats = append(result.Stats, *stats)
 		successCount++
 	}
@@ -297,23 +307,31 @@ func (s *RSSService) FetchAllRSSFeeds() (*models.RSSFetchResult, error) {
 }
 
 // processNewsItem 处理单个新闻条目
-func (s *RSSService) processNewsItem(source *models.RSSSource, item *gofeed.Item) (*models.NewsItem, bool, error) {
-	// 检查是否已存在
-	var existingItem models.NewsItem
-	isNew := false
+func (s *RSSService) processNewsItem(source *models.RSSSource, item *gofeed.Item) (*models.News, bool, error) {
+	log.Printf("[RSS DEBUG] Processing news item: %s", item.Title)
 	
+	// 检查是否已存在
+	var existingItem models.News
+	isNew := false
+
 	// 优先使用GUID，其次使用Link
 	identifier := item.GUID
 	if identifier == "" {
 		identifier = item.Link
 	}
 
+	log.Printf("[RSS DEBUG] Checking for existing item with identifier: %s, link: %s", identifier, item.Link)
+
 	err := s.db.Where("guid = ? OR link = ?", identifier, item.Link).First(&existingItem).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		isNew = true
-		existingItem = models.NewsItem{}
+		existingItem = models.News{}
+		log.Printf("[RSS DEBUG] Item is new, will create")
 	} else if err != nil {
+		log.Printf("[RSS ERROR] Database error when checking existing item: %v", err)
 		return nil, false, err
+	} else {
+		log.Printf("[RSS DEBUG] Item already exists with ID: %d, will update", existingItem.ID)
 	}
 
 	// 解析发布时间
@@ -349,27 +367,34 @@ func (s *RSSService) processNewsItem(source *models.RSSSource, item *gofeed.Item
 	}
 
 	// 更新或创建新闻条目
-	newsItem := models.NewsItem{
-		RSSSourceID: source.ID,
+	newsItem := models.News{
+		RSSSourceID: &source.ID,
+		SourceType:  models.NewsTypeRSS,
 		Title:       item.Title,
 		Link:        item.Link,
 		Description: item.Description,
 		Content:     item.Content,
 		Author:      author,
 		Category:    categoryStr,
-		Tags:        sliceToJSON(categories),
+		Tags:        utils.SliceToJSON(categories),
 		PublishedAt: publishedAt,
 		GUID:        identifier,
 		ImageURL:    imageURL,
 		Status:      "published",
 		IsProcessed: false,
+		Source:      source.Name,
+		Language:    source.Language,
+		IsActive:    true,
 	}
 
 	if isNew {
 		newsItem.ID = 0 // 确保是新记录
+		log.Printf("[RSS DEBUG] Creating new news item: %s", newsItem.Title)
 		if err := s.db.Create(&newsItem).Error; err != nil {
+			log.Printf("[RSS ERROR] Failed to create news item: %v", err)
 			return nil, false, err
 		}
+		log.Printf("[RSS DEBUG] Successfully created news item with ID: %d", newsItem.ID)
 	} else {
 		// 更新现有记录
 		newsItem.ID = existingItem.ID
@@ -378,10 +403,14 @@ func (s *RSSService) processNewsItem(source *models.RSSSource, item *gofeed.Item
 		newsItem.CommentCount = existingItem.CommentCount
 		newsItem.ShareCount = existingItem.ShareCount
 		newsItem.HotnessScore = existingItem.HotnessScore
-		
+		newsItem.CreatedBy = existingItem.CreatedBy
+
+		log.Printf("[RSS DEBUG] Updating existing news item ID: %d", newsItem.ID)
 		if err := s.db.Save(&newsItem).Error; err != nil {
+			log.Printf("[RSS ERROR] Failed to update news item: %v", err)
 			return nil, false, err
 		}
+		log.Printf("[RSS DEBUG] Successfully updated news item ID: %d", newsItem.ID)
 	}
 
 	return &newsItem, isNew, nil
@@ -389,10 +418,10 @@ func (s *RSSService) processNewsItem(source *models.RSSSource, item *gofeed.Item
 
 // GetNews 获取新闻列表
 func (s *RSSService) GetNews(query *models.NewsQueryRequest) (*models.NewsListResponse, error) {
-	var news []models.NewsItem
+	var news []models.News
 	var total int64
 
-	db := s.db.Model(&models.NewsItem{}).Preload("RSSSource")
+	db := s.db.Model(&models.News{}).Preload("RSSSource").Where("source_type = ?", models.NewsTypeRSS)
 
 	// 添加筛选条件
 	if query.RSSSourceID > 0 {
@@ -446,7 +475,33 @@ func (s *RSSService) GetNews(query *models.NewsQueryRequest) (*models.NewsListRe
 	// 转换响应格式
 	var newsResponses []models.NewsItemResponse
 	for _, item := range news {
-		newsResponses = append(newsResponses, s.convertToNewsItemResponse(&item))
+		// 将 NewsResponse 转换为 NewsItemResponse 格式以保持API兼容性
+		newsResp := item.ToResponse()
+		newsItemResp := models.NewsItemResponse{
+			ID:           newsResp.ID,
+			RSSSourceID:  *newsResp.RSSSourceID,
+			Title:        newsResp.Title,
+			Link:         newsResp.Link,
+			Description:  newsResp.Description,
+			Content:      newsResp.Content,
+			Author:       newsResp.Author,
+			Category:     newsResp.Category,
+			Tags:         newsResp.Tags,
+			PublishedAt:  newsResp.PublishedAt,
+			GUID:         newsResp.GUID,
+			ImageURL:     newsResp.ImageURL,
+			ViewCount:    newsResp.ViewCount,
+			LikeCount:    newsResp.LikeCount,
+			CommentCount: newsResp.CommentCount,
+			ShareCount:   newsResp.ShareCount,
+			HotnessScore: newsResp.HotnessScore,
+			Status:       newsResp.Status,
+			IsProcessed:  newsResp.IsProcessed,
+			CreatedAt:    newsResp.CreatedAt,
+			UpdatedAt:    newsResp.UpdatedAt,
+			RSSSource:    newsResp.RSSSource,
+		}
+		newsResponses = append(newsResponses, newsItemResp)
 	}
 
 	return &models.NewsListResponse{
@@ -457,8 +512,8 @@ func (s *RSSService) GetNews(query *models.NewsQueryRequest) (*models.NewsListRe
 
 // GetNewsItem 获取单个新闻详情
 func (s *RSSService) GetNewsItem(id uint) (*models.NewsItemResponse, error) {
-	var newsItem models.NewsItem
-	if err := s.db.Preload("RSSSource").First(&newsItem, id).Error; err != nil {
+	var newsItem models.News
+	if err := s.db.Preload("RSSSource").Where("source_type = ?", models.NewsTypeRSS).First(&newsItem, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("news item not found")
 		}
@@ -472,13 +527,38 @@ func (s *RSSService) GetNewsItem(id uint) (*models.NewsItemResponse, error) {
 	// 重新计算热度
 	s.calculateNewsHotness(newsItem.ID)
 
-	response := s.convertToNewsItemResponse(&newsItem)
+	// 转换为NewsItemResponse格式
+	newsResp := newsItem.ToResponse()
+	response := models.NewsItemResponse{
+		ID:           newsResp.ID,
+		RSSSourceID:  *newsResp.RSSSourceID,
+		Title:        newsResp.Title,
+		Link:         newsResp.Link,
+		Description:  newsResp.Description,
+		Content:      newsResp.Content,
+		Author:       newsResp.Author,
+		Category:     newsResp.Category,
+		Tags:         newsResp.Tags,
+		PublishedAt:  newsResp.PublishedAt,
+		GUID:         newsResp.GUID,
+		ImageURL:     newsResp.ImageURL,
+		ViewCount:    newsResp.ViewCount,
+		LikeCount:    newsResp.LikeCount,
+		CommentCount: newsResp.CommentCount,
+		ShareCount:   newsResp.ShareCount,
+		HotnessScore: newsResp.HotnessScore,
+		Status:       newsResp.Status,
+		IsProcessed:  newsResp.IsProcessed,
+		CreatedAt:    newsResp.CreatedAt,
+		UpdatedAt:    newsResp.UpdatedAt,
+		RSSSource:    newsResp.RSSSource,
+	}
 	return &response, nil
 }
 
 // calculateNewsHotness 计算新闻热度
 func (s *RSSService) calculateNewsHotness(newsID uint) error {
-	var newsItem models.NewsItem
+	var newsItem models.News
 	if err := s.db.First(&newsItem, newsID).Error; err != nil {
 		return err
 	}
@@ -554,34 +634,4 @@ func (s *RSSService) convertToRSSSourceResponse(source *models.RSSSource) *model
 	}
 }
 
-func (s *RSSService) convertToNewsItemResponse(item *models.NewsItem) models.NewsItemResponse {
-	response := models.NewsItemResponse{
-		ID:           item.ID,
-		RSSSourceID:  item.RSSSourceID,
-		Title:        item.Title,
-		Link:         item.Link,
-		Description:  item.Description,
-		Content:      item.Content,
-		Author:       item.Author,
-		Category:     item.Category,
-		Tags:         item.Tags,
-		PublishedAt:  item.PublishedAt,
-		GUID:         item.GUID,
-		ImageURL:     item.ImageURL,
-		ViewCount:    item.ViewCount,
-		LikeCount:    item.LikeCount,
-		CommentCount: item.CommentCount,
-		ShareCount:   item.ShareCount,
-		HotnessScore: item.HotnessScore,
-		Status:       item.Status,
-		IsProcessed:  item.IsProcessed,
-		CreatedAt:    item.CreatedAt,
-		UpdatedAt:    item.UpdatedAt,
-	}
-
-	if item.RSSSource.ID > 0 {
-		response.RSSSource = s.convertToRSSSourceResponse(&item.RSSSource)
-	}
-
-	return response
-}
+// convertToNewsItemResponse 函数已删除，现在直接使用 News.ToResponse() 方法

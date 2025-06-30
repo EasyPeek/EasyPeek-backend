@@ -36,9 +36,10 @@ func (s *NewsService) CreateNews(req *models.NewsCreateRequest, createdByUserID 
 		Summary:     req.Summary,
 		Source:      req.Source,
 		Category:    req.Category,
-		PublishedAt: time.Now(),      // 默认设置为当前时间，如果请求中没有提供
-		CreatedBy:   createdByUserID, // 设置创建者ID
-		IsActive:    true,            // 默认新闻是活跃的/可见的
+		PublishedAt: time.Now(),        // 默认设置为当前时间，如果请求中没有提供
+		CreatedBy:   &createdByUserID,  // 设置创建者ID指针
+		IsActive:    true,              // 默认新闻是活跃的/可见的
+		SourceType:  models.NewsTypeManual, // 手动创建的新闻
 	}
 
 	// 如果请求中提供了 PublishedAt，则使用请求的值

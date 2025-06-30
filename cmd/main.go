@@ -31,10 +31,9 @@ func main() {
 	// execute database migration
 	if err := database.Migrate(
 		&models.User{},
-
 		&models.Event{},
 		&models.RSSSource{},
-		&models.News{},
+		&models.News{}, // 统一的新闻模型，支持手动创建和RSS抓取
 	); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}

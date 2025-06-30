@@ -61,15 +61,15 @@ func (s *RSSScheduler) Stop() {
 
 // fetchAllRSSFeeds 抓取所有RSS源
 func (s *RSSScheduler) fetchAllRSSFeeds() {
-	log.Println("Starting scheduled RSS fetch...")
+	log.Println("[RSS SCHEDULER] Starting scheduled RSS fetch...")
 	
 	result, err := s.rssService.FetchAllRSSFeeds()
 	if err != nil {
-		log.Printf("Scheduled RSS fetch failed: %v", err)
+		log.Printf("[RSS SCHEDULER ERROR] Scheduled RSS fetch failed: %v", err)
 		return
 	}
 	
-	log.Printf("Scheduled RSS fetch completed: %s", result.Message)
+	log.Printf("[RSS SCHEDULER] Scheduled RSS fetch completed: %s", result.Message)
 	
 	// 记录详细统计信息
 	totalNew := 0
