@@ -8,6 +8,7 @@
 
 ### 主要表结构
 - **`news`** - 新闻主表（简化版，无RSS相关字段）
+- **`events`** - 事件主表，存储重要事件信息
 - **`event_news_relations`** - 事件新闻关联表
 - **视图和函数** - 热度计算、统计分析
 
@@ -84,12 +85,53 @@ INSERT INTO news (
 );
 ```
 
-### 批量插入示例
+### 事件表操作示例
 ```sql
-INSERT INTO news (title, content, source, category, published_at, author, tags) VALUES 
-('科技新闻标题', '科技新闻内容...', '科技日报', '科技', NOW(), '科技记者', '["科技", "创新"]'),
-('体育新闻标题', '体育新闻内容...', '体育周报', '体育', NOW(), '体育记者', '["体育", "比赛"]'),
-('经济新闻标题', '经济新闻内容...', '财经网', '经济', NOW(), '财经记者', '["经济", "市场"]');
+-- 创建事件表 (如果使用迁移脚本，此步骤可省略)
+CREATE TABLE IF NOT EXISTS events (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    category VARCHAR(50) NOT NULL,
+    start_date TIMESTAMP NOT NULL,
+    end_date TIMESTAMP,
+    location VARCHAR(255),
+    importance INTEGER DEFAULT 0,
+    tags JSONB,
+    is_active BOOLEAN DEFAULT TRUE,
+    status VARCHAR(50) DEFAULT 'published',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP
+);
+
+-- 插入事件数据
+INSERT INTO events (
+    title, description, category, start_date, end_date, 
+    location, importance, tags, status
+) VALUES (
+    '2025年全国两会',
+    '中国人民政治协商会议第十四届全国委员会第三次会议和中华人民共和国第十四届全国人民代表大会第三次会议',
+    '政治',
+    '2025-03-04 00:00:00',
+    '2025-03-15 00:00:00',
+    '北京',
+    5,  -- 重要性级别 (1-5)
+    '["政治", "两会", "国家事务"]',
+    'published'
+);
+
+-- 批量插入事件
+INSERT INTO events (title, description, category, start_date, importance, tags) VALUES 
+('世界人工智能大会', '全球AI技术盛会，展示最新AI成果', '科技', '2025-07-10 09:00:00', 4, '["科技", "AI", "创新"]'),
+('中国国际进口博览会', '第八届中国国际进口博览会', '经济', '2025-11-05 00:00:00', 5, '["经济", "贸易", "国际"]'),
+('冬季奥运会', '2026年冬季奥林匹克运动会', '体育', '2026-02-06 00:00:00', 5, '["体育", "奥运", "国际"]');
+
+-- 创建事件与新闻关联
+INSERT INTO event_news_relations (event_id, news_id, relation_type) VALUES 
+(1, 15, 'primary'),  -- 主要相关新闻
+(1, 16, 'related'),  -- 相关新闻
+(1, 17, 'background');  -- 背景新闻
 ```
 
 ## 🔍 数据查询示例
@@ -102,14 +144,17 @@ FROM news
 ORDER BY published_at DESC 
 LIMIT 10;
 
--- 按分类查询
-SELECT * FROM news WHERE category = '科技' ORDER BY hotness_score DESC;
+-- 查看所有事件
+SELECT id, title, category, start_date, end_date, importance 
+FROM events 
+WHERE is_active = true
+ORDER BY start_date DESC 
+LIMIT 10;
 
--- 按热度排序
-SELECT title, source, hotness_score, view_count, like_count 
-FROM news 
-ORDER BY hotness_score DESC 
-LIMIT 5;
+-- 按分类查询事件
+SELECT * FROM events 
+WHERE category = '政治' AND is_active = true
+ORDER BY start_date DESC;
 ```
 
 ### 高级查询
@@ -117,16 +162,26 @@ LIMIT 5;
 -- 使用统计视图
 SELECT * FROM news_stats_summary;
 
--- 使用详细视图
-SELECT id, title, category_rank, global_rank, hotness_score 
-FROM news_with_stats 
-WHERE category = '科技' 
-LIMIT 10;
+-- 查询事件及其关联新闻
+SELECT e.id as event_id, e.title as event_title, 
+       n.id as news_id, n.title as news_title, 
+       enr.relation_type
+FROM events e
+JOIN event_news_relations enr ON e.id = enr.event_id
+JOIN news n ON enr.news_id = n.id
+WHERE e.id = 1;
 
--- 搜索新闻
-SELECT id, title, content 
-FROM news 
-WHERE title ILIKE '%人工智能%' OR content ILIKE '%人工智能%';
+-- 查询正在进行的事件
+SELECT * FROM events
+WHERE start_date <= NOW() 
+AND (end_date IS NULL OR end_date >= NOW())
+AND is_active = true
+ORDER BY importance DESC;
+
+-- 搜索事件
+SELECT id, title, description 
+FROM events 
+WHERE title ILIKE '%大会%' OR description ILIKE '%大会%';
 ```
 
 ## 📈 热度管理
@@ -164,15 +219,16 @@ UPDATE news SET share_count = share_count + 1 WHERE id = 1;
 ```sql
 -- 删除测试数据
 DELETE FROM news WHERE source = '测试来源';
+DELETE FROM events WHERE title LIKE '%测试%';
 
 -- 软删除（推荐）
 UPDATE news SET deleted_at = NOW() WHERE id = 1;
+UPDATE events SET deleted_at = NOW() WHERE id = 1;
 
--- 清理过期新闻（7天前的新闻）
-UPDATE news 
-SET is_active = false 
-WHERE published_at < NOW() - INTERVAL '7 days' 
-AND category IN ('测试', '临时');
+-- 清理事件与新闻关联
+DELETE FROM event_news_relations 
+WHERE event_id IN (SELECT id FROM events WHERE deleted_at IS NOT NULL)
+OR news_id IN (SELECT id FROM news WHERE deleted_at IS NOT NULL);
 ```
 
 ### 数据备份
@@ -260,3 +316,5 @@ LIMIT 5;
 
 docker exec postgres_easypeak psql -U postgres -c "ALTER USER postgres PASSWORD 'password';"
 docker exec postgres_easypeak psql -U postgres -c "CREATE DATABASE easypeek;"
+.\migrate.bat migrations\simple_init.sql 
+.\migrate.bat migrations\add_missing_fields.sql

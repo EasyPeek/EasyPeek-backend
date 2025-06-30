@@ -38,8 +38,8 @@ if %ERRORLEVEL% == 0 (
     docker run -d ^
       --name postgres_easypeak ^
       -e POSTGRES_USER=postgres ^
-      -e POSTGRES_PASSWORD=password ^
-      -e POSTGRES_DB=easypeek ^
+      -e POSTGRES_PASSWORD=PostgresPassword ^
+      -e POSTGRES_DB=easypeekdb ^
       -p 5432:5432 ^
       postgres:15
     
