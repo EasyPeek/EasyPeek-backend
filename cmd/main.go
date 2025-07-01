@@ -13,6 +13,7 @@ import (
 	"github.com/EasyPeek/EasyPeek-backend/internal/database"
 	"github.com/EasyPeek/EasyPeek-backend/internal/models"
 	"github.com/EasyPeek/EasyPeek-backend/internal/scheduler"
+	"github.com/EasyPeek/EasyPeek-backend/internal/services"
 )
 
 func main() {
@@ -36,6 +37,13 @@ func main() {
 		&models.News{}, // 统一的新闻模型，支持手动创建和RSS抓取
 	); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
+	}
+
+	// initialize seed data
+	seedService := services.NewSeedService()
+	if err := seedService.SeedAllData(); err != nil {
+		log.Printf("Warning: Failed to seed initial data: %v", err)
+		// 注意：这里只是记录警告，不会导致程序终止，因为数据导入失败不应该阻止服务启动
 	}
 
 	// initialize RSS scheduler
