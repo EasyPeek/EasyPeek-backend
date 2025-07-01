@@ -12,11 +12,13 @@ import (
 
 type EventHandler struct {
 	eventService *services.EventService
+	newsService  *services.NewsService
 }
 
 func NewEventHandler() *EventHandler {
 	return &EventHandler{
 		eventService: services.NewEventService(),
+		newsService:  services.NewNewsService(),
 	}
 }
 
@@ -650,4 +652,71 @@ func (h *EventHandler) GetEventStats(c *gin.Context) {
 	}
 
 	utils.Success(c, stats)
+}
+
+// GenerateEventsFromNews 从新闻自动生成事件
+// @Summary 从新闻自动生成事件
+// @Description 基于现有新闻数据自动生成事件，会自动聚类相似新闻并建立关联
+// @Tags events
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} utils.Response{data=services.EventGenerationResult}
+// @Failure 401 {object} utils.Response
+// @Failure 500 {object} utils.Response
+// @Router /api/v1/events/generate [post]
+func (h *EventHandler) GenerateEventsFromNews(c *gin.Context) {
+	// 调用事件生成服务
+	result, err := h.eventService.GenerateEventsFromNews()
+	if err != nil {
+		utils.InternalServerError(c, err.Error())
+		return
+	}
+
+	utils.Success(c, result)
+}
+
+// GetNewsByEventID 根据事件ID获取相关新闻
+// @Summary 根据事件ID获取相关新闻
+// @Description 获取指定事件相关联的所有新闻列表
+// @Tags events
+// @Produce json
+// @Param id path int true "事件ID"
+// @Success 200 {object} utils.Response{data=[]models.NewsResponse}
+// @Failure 400 {object} utils.Response
+// @Failure 404 {object} utils.Response
+// @Failure 500 {object} utils.Response
+// @Router /api/v1/events/{id}/news [get]
+func (h *EventHandler) GetNewsByEventID(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "Invalid event ID")
+		return
+	}
+
+	// 先检查事件是否存在
+	_, err = h.eventService.GetEventByID(uint(id))
+	if err != nil {
+		if err.Error() == "event not found" {
+			utils.NotFound(c, "Event not found")
+			return
+		}
+		utils.InternalServerError(c, "Failed to verify event")
+		return
+	}
+
+	// 获取相关新闻
+	newsList, err := h.newsService.GetNewsByEventID(uint(id))
+	if err != nil {
+		utils.InternalServerError(c, "Failed to get news by event ID")
+		return
+	}
+
+	// 转换为响应格式
+	var newsResponses []models.NewsResponse
+	for _, news := range newsList {
+		newsResponses = append(newsResponses, news.ToResponse())
+	}
+
+	utils.Success(c, newsResponses)
 }

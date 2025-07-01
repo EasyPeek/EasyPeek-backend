@@ -56,6 +56,7 @@ func SetupRoutes() *gin.Engine {
 			events.GET("/category/:category", eventHandler.GetEventsByCategory)
 			events.GET("/tags", eventHandler.GetPopularTags)
 			events.GET("/:id", eventHandler.GetEvent)
+			events.GET("/:id/news", eventHandler.GetNewsByEventID)
 			events.GET("/:id/stats", eventHandler.GetEventStats)
 			events.GET("/status/:status", eventHandler.GetEventsByStatus)
 			events.POST("/:id/view", eventHandler.IncrementViewCount)
@@ -78,6 +79,7 @@ func SetupRoutes() *gin.Engine {
 			adminEvents.Use(middleware.AdminMiddleware())
 			{
 				adminEvents.PUT("/:id/tags", eventHandler.UpdateEventTags)
+				adminEvents.POST("/generate", eventHandler.GenerateEventsFromNews)
 			}
 
 			// 系统内部路由（需要特殊权限）
