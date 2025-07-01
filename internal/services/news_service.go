@@ -329,7 +329,7 @@ func (s *NewsService) GetHotNews(limit int) ([]models.News, error) {
 	}
 
 	var newsList []models.News
-	
+
 	// 设置默认限制
 	if limit <= 0 || limit > 100 {
 		limit = 10
@@ -355,7 +355,7 @@ func (s *NewsService) GetLatestNews(limit int) ([]models.News, error) {
 	}
 
 	var newsList []models.News
-	
+
 	// 设置默认限制
 	if limit <= 0 || limit > 100 {
 		limit = 10

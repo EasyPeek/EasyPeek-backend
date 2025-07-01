@@ -25,6 +25,7 @@ func SetupRoutes() *gin.Engine {
 	eventHandler := NewEventHandler()
 	rssHandler := NewRSSHandler()
 	newsHandler := NewNewsHandler()
+	commentHandler := NewCommentHandler()
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")
@@ -53,11 +54,11 @@ func SetupRoutes() *gin.Engine {
 		news := v1.Group("/news")
 		{
 			// 公开路由 - 前端可以直接访问
-			news.GET("", newsHandler.GetAllNews)          // 获取所有新闻列表（带分页）
-			news.GET("/hot", newsHandler.GetHotNews)      // 获取热门新闻
+			news.GET("", newsHandler.GetAllNews)           // 获取所有新闻列表（带分页）
+			news.GET("/hot", newsHandler.GetHotNews)       // 获取热门新闻
 			news.GET("/latest", newsHandler.GetLatestNews) // 获取最新新闻
-			news.GET("/:id", newsHandler.GetNewsByID)     // 根据ID获取单条新闻
-			news.GET("/search", newsHandler.SearchNews)   // 搜索新闻
+			news.GET("/:id", newsHandler.GetNewsByID)      // 根据ID获取单条新闻
+			news.GET("/search", newsHandler.SearchNews)    // 搜索新闻
 
 			// 需要身份验证的路由
 			authNews := news.Group("")
@@ -66,6 +67,24 @@ func SetupRoutes() *gin.Engine {
 				authNews.POST("", newsHandler.CreateNews)       // 创建新闻
 				authNews.PUT("/:id", newsHandler.UpdateNews)    // 更新新闻
 				authNews.DELETE("/:id", newsHandler.DeleteNews) // 删除新闻
+			}
+		}
+
+		// comment routes
+		comments := v1.Group("/comments")
+		{
+			// 公开路由
+			comments.GET("/:id", commentHandler.GetCommentByID)                // 根据ID获取单条评论
+			comments.GET("/news/:news_id", commentHandler.GetCommentsByNewsID) // 根据新闻ID获取评论列表
+			comments.GET("/user/:user_id", commentHandler.GetCommentsByUserID) // 根据用户ID获取评论列表
+
+			// 需要身份验证的路由
+			authComments := comments.Group("")
+			authComments.Use(middleware.AuthMiddleware())
+			{
+				authComments.POST("", commentHandler.CreateComment)       // 创建评论
+				authComments.PUT("/:id", commentHandler.UpdateComment)    // 更新评论
+				authComments.DELETE("/:id", commentHandler.DeleteComment) // 删除评论
 			}
 		}
 
@@ -174,6 +193,13 @@ func SetupRoutes() *gin.Engine {
 				news.GET("", adminHandler.GetAllNews)        // 获取所有新闻
 				news.PUT("/:id", adminHandler.UpdateNews)    // 更新新闻
 				news.DELETE("/:id", adminHandler.DeleteNews) // 删除新闻
+			}
+
+			// 评论管理
+			comments := admin.Group("/comments")
+			{
+				comments.GET("", commentHandler.GetAllComments)            // 获取所有评论
+				comments.DELETE("/:id", commentHandler.AdminDeleteComment) // 管理员删除评论（硬删除）
 			}
 
 			// RSS源管理
