@@ -320,3 +320,54 @@ func (s *NewsService) GetUnlinkedNews(page, pageSize int) ([]models.News, int64,
 
 	return newsList, total, nil
 }
+
+// GetHotNews 获取热门新闻，按照浏览量、点赞数等热度指标排序
+func (s *NewsService) GetHotNews(limit int) ([]models.News, error) {
+	// 检查数据库连接是否已初始化
+	if s.db == nil {
+		return nil, errors.New("database connection not initialized")
+	}
+
+	var newsList []models.News
+	
+	// 设置默认限制
+	if limit <= 0 || limit > 100 {
+		limit = 10
+	}
+
+	// 查询热门新闻，按创建时间倒序排列（可以后续根据实际的热度字段调整）
+	// 这里暂时按照创建时间排序，实际项目中可以根据浏览量、点赞数等字段排序
+	if err := s.db.Where("is_active = ?", true).
+		Order("created_at desc").
+		Limit(limit).
+		Find(&newsList).Error; err != nil {
+		return nil, fmt.Errorf("failed to get hot news: %w", err)
+	}
+
+	return newsList, nil
+}
+
+// GetLatestNews 获取最新新闻，按发布时间倒序排列
+func (s *NewsService) GetLatestNews(limit int) ([]models.News, error) {
+	// 检查数据库连接是否已初始化
+	if s.db == nil {
+		return nil, errors.New("database connection not initialized")
+	}
+
+	var newsList []models.News
+	
+	// 设置默认限制
+	if limit <= 0 || limit > 100 {
+		limit = 10
+	}
+
+	// 查询最新新闻，按发布时间倒序排列
+	if err := s.db.Where("is_active = ?", true).
+		Order("published_at desc").
+		Limit(limit).
+		Find(&newsList).Error; err != nil {
+		return nil, fmt.Errorf("failed to get latest news: %w", err)
+	}
+
+	return newsList, nil
+}

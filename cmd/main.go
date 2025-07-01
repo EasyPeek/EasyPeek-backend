@@ -42,7 +42,7 @@ func main() {
 	// initialize seed data
 	seedService := services.NewSeedService()
 
-	if err := seedService.SeedDefaultData(); err != nil {
+	if err := seedService.SeedAllData(); err != nil {
 		log.Printf("Warning: Failed to seed initial data: %v", err)
 	}
 

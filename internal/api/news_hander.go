@@ -213,3 +213,59 @@ func (h *NewsHandler) SearchNews(c *gin.Context) {
 	// 返回带分页信息成功的响应
 	utils.SuccessWithPagination(c, newsResponses, total, page, size)
 }
+
+// GetHotNews 获取热门新闻
+func (h *NewsHandler) GetHotNews(c *gin.Context) {
+	// 获取查询参数中的限制数量，并设置默认值
+	limitStr := c.DefaultQuery("limit", "10")
+	
+	// 转换限制数量为整数，并处理无效值
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit < 1 || limit > 100 {
+		limit = 10
+	}
+
+	// 调用 NewsService 的 GetHotNews 方法获取热门新闻
+	newsList, err := h.newsService.GetHotNews(limit)
+	if err != nil {
+		utils.InternalServerError(c, err.Error())
+		return
+	}
+
+	// 将新闻列表转换为响应格式
+	var newsResponses []models.NewsResponse
+	for _, news := range newsList {
+		newsResponses = append(newsResponses, news.ToResponse())
+	}
+
+	// 返回成功响应
+	utils.Success(c, newsResponses)
+}
+
+// GetLatestNews 获取最新新闻
+func (h *NewsHandler) GetLatestNews(c *gin.Context) {
+	// 获取查询参数中的限制数量，并设置默认值
+	limitStr := c.DefaultQuery("limit", "10")
+	
+	// 转换限制数量为整数，并处理无效值
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit < 1 || limit > 100 {
+		limit = 10
+	}
+
+	// 调用 NewsService 的 GetLatestNews 方法获取最新新闻
+	newsList, err := h.newsService.GetLatestNews(limit)
+	if err != nil {
+		utils.InternalServerError(c, err.Error())
+		return
+	}
+
+	// 将新闻列表转换为响应格式
+	var newsResponses []models.NewsResponse
+	for _, news := range newsList {
+		newsResponses = append(newsResponses, news.ToResponse())
+	}
+
+	// 返回成功响应
+	utils.Success(c, newsResponses)
+}
