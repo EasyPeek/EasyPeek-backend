@@ -2,6 +2,7 @@ package services
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/EasyPeek/EasyPeek-backend/internal/database"
 	"github.com/EasyPeek/EasyPeek-backend/internal/models"
+	"github.com/EasyPeek/EasyPeek-backend/internal/utils"
 	"gorm.io/gorm"
 )
 
@@ -198,5 +200,146 @@ func (s *SeedService) SeedAllData() error {
 	// - 事件数据等
 
 	log.Println("所有种子数据初始化完成！")
+	return nil
+}
+
+// SeedInitialAdmin 创建初始管理员账户
+func (s *SeedService) SeedInitialAdmin() error {
+	if s.db == nil {
+		return errors.New("database connection not initialized")
+	}
+
+	// 检查是否已经存在管理员账户
+	var adminCount int64
+	if err := s.db.Model(&models.User{}).Where("role = ?", "admin").Count(&adminCount).Error; err != nil {
+		return err
+	}
+
+	// 如果已经存在管理员，不需要创建
+	if adminCount > 0 {
+		log.Println("Admin account already exists, skipping seed")
+		return nil
+	}
+
+	// 从环境变量或默认值获取管理员信息
+	adminEmail := os.Getenv("ADMIN_EMAIL")
+	if adminEmail == "" {
+		adminEmail = "admin@easypeek.com"
+	}
+
+	adminPassword := os.Getenv("ADMIN_PASSWORD")
+	if adminPassword == "" {
+		adminPassword = "admin123456" // 默认密码，生产环境应该修改
+	}
+
+	adminUsername := os.Getenv("ADMIN_USERNAME")
+	if adminUsername == "" {
+		adminUsername = "admin"
+	}
+
+	// 验证输入
+	if !utils.IsValidEmail(adminEmail) {
+		return errors.New("invalid admin email format")
+	}
+
+	if !utils.IsValidPassword(adminPassword) {
+		return errors.New("admin password must contain at least one letter and one number")
+	}
+
+	if !utils.IsValidUsername(adminUsername) {
+		return errors.New("invalid admin username format")
+	}
+
+	// 检查邮箱和用户名是否已存在
+	var existingUser models.User
+	if err := s.db.Where("email = ? OR username = ?", adminEmail, adminUsername).First(&existingUser).Error; err == nil {
+		return errors.New("admin email or username already exists")
+	}
+
+	// 创建管理员账户
+	adminUser := &models.User{
+		Username: adminUsername,
+		Email:    adminEmail,
+		Password: adminPassword, // 会被 BeforeCreate hook 自动加密
+		Role:     "admin",
+		Status:   "active",
+	}
+
+	if err := s.db.Create(adminUser).Error; err != nil {
+		return err
+	}
+
+	log.Printf("Initial admin account created successfully:")
+	log.Printf("- Username: %s", adminUsername)
+	log.Printf("- Email: %s", adminEmail)
+	log.Printf("- Password: %s", adminPassword)
+	log.Println("Please change the default password after first login!")
+
+	return nil
+}
+
+// SeedDefaultData 种子数据初始化
+func (s *SeedService) SeedDefaultData() error {
+	// 创建初始管理员
+	if err := s.SeedInitialAdmin(); err != nil {
+		return err
+	}
+
+	// 可以在这里添加其他默认数据的初始化
+	// 例如：默认分类、默认RSS源等
+
+	return nil
+}
+
+// SeedRSSources 创建默认RSS源（可选）
+func (s *SeedService) SeedRSSources() error {
+	if s.db == nil {
+		return errors.New("database connection not initialized")
+	}
+
+	// 检查是否已经存在RSS源
+	var rssCount int64
+	if err := s.db.Model(&models.RSSSource{}).Count(&rssCount).Error; err != nil {
+		return err
+	}
+
+	// 如果已经存在RSS源，不需要创建
+	if rssCount > 0 {
+		log.Println("RSS sources already exist, skipping seed")
+		return nil
+	}
+
+	// 创建一些默认的RSS源
+	defaultSources := []models.RSSSource{
+		{
+			Name:        "新浪新闻",
+			URL:         "http://rss.sina.com.cn/news/china/focus15.xml",
+			Category:    "国内新闻",
+			Language:    "zh",
+			IsActive:    true,
+			Description: "新浪网国内新闻RSS源",
+			Priority:    1,
+			UpdateFreq:  60,
+		},
+		{
+			Name:        "网易科技",
+			URL:         "http://rss.163.com/rss/tech_index.xml",
+			Category:    "科技",
+			Language:    "zh",
+			IsActive:    true,
+			Description: "网易科技新闻RSS源",
+			Priority:    1,
+			UpdateFreq:  60,
+		},
+	}
+
+	for _, source := range defaultSources {
+		if err := s.db.Create(&source).Error; err != nil {
+			log.Printf("Failed to create RSS source %s: %v", source.Name, err)
+		} else {
+			log.Printf("Created default RSS source: %s", source.Name)
+		}
+	}
+
 	return nil
 }

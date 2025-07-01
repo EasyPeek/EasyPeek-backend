@@ -23,6 +23,7 @@ func SetupRoutes() *gin.Engine {
 	userHandler := NewUserHandler()
 	eventHandler := NewEventHandler()
 	rssHandler := NewRSSHandler()
+	adminHandler := NewAdminHandler()
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")
@@ -32,8 +33,8 @@ func SetupRoutes() *gin.Engine {
 		{
 			auth.POST("/register", userHandler.Register)
 			auth.POST("/login", userHandler.Login)
-			// auth.POST(refresh)
-			// auth.POST(logout)
+			// auth.POST("/refresh", userHandler.RefreshToken)  // TODO: 实现token刷新
+			// auth.POST("/logout", userHandler.Logout)         // TODO: 实现登出
 		}
 
 		// user routes
@@ -43,6 +44,8 @@ func SetupRoutes() *gin.Engine {
 			user.GET("/profile", userHandler.GetProfile)
 			user.PUT("/profile", userHandler.UpdateProfile)
 			user.POST("/change-password", userHandler.ChangePassword)
+			// 用户自删除账户
+			user.DELETE("/me", userHandler.DeleteSelf)
 		}
 
 		// event routes
@@ -76,16 +79,16 @@ func SetupRoutes() *gin.Engine {
 			// 管理员专用路由
 			adminEvents := events.Group("")
 			adminEvents.Use(middleware.AuthMiddleware())
-			adminEvents.Use(middleware.AdminMiddleware())
+			adminEvents.Use(middleware.RoleMiddleware(middleware.RoleAdmin))
 			{
 				adminEvents.PUT("/:id/tags", eventHandler.UpdateEventTags)
 				adminEvents.POST("/generate", eventHandler.GenerateEventsFromNews)
 			}
 
-			// 系统内部路由（需要特殊权限）
+			// 系统内部路由（需要系统权限或管理员权限）
 			systemEvents := events.Group("")
 			systemEvents.Use(middleware.AuthMiddleware())
-			// TODO: 添加系统权限中间件
+			systemEvents.Use(middleware.RequireSystemOrAdmin())
 			{
 				systemEvents.PUT("/:id/hotness", eventHandler.UpdateEventHotness)
 			}
@@ -104,7 +107,7 @@ func SetupRoutes() *gin.Engine {
 			// 管理员路由
 			adminRSS := rss.Group("")
 			adminRSS.Use(middleware.AuthMiddleware())
-			adminRSS.Use(middleware.AdminMiddleware())
+			adminRSS.Use(middleware.RoleMiddleware(middleware.RoleAdmin))
 			{
 				adminRSS.GET("/sources", rssHandler.GetRSSSources)
 				adminRSS.POST("/sources", rssHandler.CreateRSSSource)
@@ -118,11 +121,62 @@ func SetupRoutes() *gin.Engine {
 		// admin routes
 		admin := v1.Group("/admin")
 		admin.Use(middleware.AuthMiddleware())
-		admin.Use(middleware.AdminMiddleware())
+		admin.Use(middleware.AdminAuthMiddleware())
 		{
-			admin.GET("/users", userHandler.GetUsers)
-			admin.GET("/users/:id", userHandler.GetUser)
-			admin.DELETE("/users/:id", userHandler.DeleteUser)
+			// 系统统计
+			admin.GET("/stats", adminHandler.GetSystemStats)
+
+			// 用户管理
+			users := admin.Group("/users")
+			{
+				users.GET("", adminHandler.GetAllUsers)          // 获取所有用户（带过滤）
+				users.GET("/active", userHandler.GetActiveUsers) // 获取活跃用户（保持兼容）
+				users.GET("/:id", adminHandler.GetUserByID)      // 获取指定用户
+				users.PUT("/:id", adminHandler.UpdateUser)       // 更新用户信息
+				users.DELETE("/:id", adminHandler.DeleteUser)    // 管理员删除用户（硬删除）
+				// 保留原有的单独角色和状态更新接口
+				users.PUT("/:id/role", userHandler.UpdateUserRole)     // 更新用户角色
+				users.PUT("/:id/status", userHandler.UpdateUserStatus) // 更新用户状态
+			}
+
+			// 事件管理
+			events := admin.Group("/events")
+			{
+				events.GET("", adminHandler.GetAllEvents)       // 获取所有事件
+				events.PUT("/:id", adminHandler.UpdateEvent)    // 更新事件
+				events.DELETE("/:id", adminHandler.DeleteEvent) // 删除事件
+			}
+
+			// 新闻管理
+			news := admin.Group("/news")
+			{
+				news.GET("", adminHandler.GetAllNews)        // 获取所有新闻
+				news.PUT("/:id", adminHandler.UpdateNews)    // 更新新闻
+				news.DELETE("/:id", adminHandler.DeleteNews) // 删除新闻
+			}
+
+			// RSS源管理
+			rssAdmin := admin.Group("/rss-sources")
+			{
+				rssAdmin.GET("", adminHandler.GetAllRSSSources)            // 获取所有RSS源
+				rssAdmin.POST("", adminHandler.CreateRSSSource)            // 创建RSS源
+				rssAdmin.PUT("/:id", adminHandler.UpdateRSSSource)         // 更新RSS源
+				rssAdmin.DELETE("/:id", adminHandler.DeleteRSSSource)      // 删除RSS源
+				rssAdmin.POST("/:id/fetch", adminHandler.FetchRSSFeed)     // 手动抓取RSS源
+				rssAdmin.POST("/fetch-all", adminHandler.FetchAllRSSFeeds) // 抓取所有RSS源
+			}
+		}
+
+		// 系统管理路由（需要系统权限）
+		system := v1.Group("/system")
+		system.Use(middleware.AuthMiddleware())
+		system.Use(middleware.RoleMiddleware(middleware.RoleSystem))
+		{
+			// 系统级用户管理
+			systemUsers := system.Group("/users")
+			{
+				systemUsers.PUT("/:id/role", userHandler.UpdateUserRole) // 系统级角色更新
+			}
 		}
 	}
 

@@ -41,9 +41,9 @@ func main() {
 
 	// initialize seed data
 	seedService := services.NewSeedService()
-	if err := seedService.SeedAllData(); err != nil {
+	if err := seedService.SeedDefaultData(); err != nil {
 		log.Printf("Warning: Failed to seed initial data: %v", err)
-		// 注意：这里只是记录警告，不会导致程序终止，因为数据导入失败不应该阻止服务启动
+
 	}
 
 	// initialize RSS scheduler

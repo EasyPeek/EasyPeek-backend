@@ -29,23 +29,3 @@ func AuthMiddleware() gin.HandlerFunc {
 		c.Next()
 	}
 }
-
-// AdminMiddleware 管理员权限中间件
-func AdminMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		role, exists := c.Get("role")
-		if !exists {
-			utils.Forbidden(c, "No role information")
-			c.Abort()
-			return
-		}
-
-		if role != "admin" {
-			utils.Forbidden(c, "Admin access required")
-			c.Abort()
-			return
-		}
-
-		c.Next()
-	}
-}

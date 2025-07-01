@@ -53,6 +53,22 @@ type ChangePasswordRequest struct {
 	NewPassword string `json:"new_password" binding:"required,min=8"`
 }
 
+// UpdateUserRoleRequest 更新用户角色请求
+type UpdateUserRoleRequest struct {
+	Role string `json:"role" binding:"required,oneof=user admin system"`
+}
+
+// UpdateUserStatusRequest 更新用户状态请求
+type UpdateUserStatusRequest struct {
+	Status string `json:"status" binding:"required,oneof=active inactive suspended deleted"`
+}
+
+// DeleteAccountRequest 删除账户请求
+type DeleteAccountRequest struct {
+	Password string `json:"password" binding:"required"` // 要求输入密码确认删除
+	Reason   string `json:"reason"`                      // 删除原因（可选）
+}
+
 func (u *User) BeforeCreate(tx *gorm.DB) error {
 	if u.Password != "" {
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)

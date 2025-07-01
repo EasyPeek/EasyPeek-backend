@@ -193,3 +193,122 @@ func (s *UserService) GetAllUsers(page, pageSize int) ([]models.User, int64, err
 
 	return users, total, nil
 }
+
+// SoftDeleteUser 软删除用户账户（用户自删除）
+func (s *UserService) SoftDeleteUser(userID uint) error {
+	// check if database connection is initialized
+	if s.db == nil {
+		return errors.New("database connection not initialized")
+	}
+
+	// 获取用户信息
+	var user models.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("user not found")
+		}
+		return err
+	}
+
+	// 检查用户是否已经被删除
+	if user.Status == "deleted" {
+		return errors.New("user account is already deleted")
+	}
+
+	// 软删除：更新状态为 deleted
+	user.Status = "deleted"
+	if err := s.db.Save(&user).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetActiveUsers 获取所有活跃用户（排除已删除的用户）
+func (s *UserService) GetActiveUsers(page, pageSize int) ([]models.User, int64, error) {
+	if s.db == nil {
+		return nil, 0, errors.New("database connection not initialized")
+	}
+
+	var users []models.User
+	var total int64
+
+	// 只统计活跃用户
+	if err := s.db.Model(&models.User{}).Where("status != ?", "deleted").Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// 分页查询活跃用户
+	offset := (page - 1) * pageSize
+	if err := s.db.Where("status != ?", "deleted").Offset(offset).Limit(pageSize).Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return users, total, nil
+}
+
+// UpdateUserRole 更新用户角色（管理员功能）
+func (s *UserService) UpdateUserRole(userID uint, newRole string) error {
+	if s.db == nil {
+		return errors.New("database connection not initialized")
+	}
+
+	// 验证角色是否有效
+	validRoles := []string{"user", "admin", "system"}
+	isValidRole := false
+	for _, role := range validRoles {
+		if role == newRole {
+			isValidRole = true
+			break
+		}
+	}
+
+	if !isValidRole {
+		return errors.New("invalid role. Valid roles are: user, admin, system")
+	}
+
+	// 更新用户角色
+	result := s.db.Model(&models.User{}).Where("id = ?", userID).Update("role", newRole)
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.New("user not found")
+	}
+
+	return nil
+}
+
+// UpdateUserStatus 更新用户状态（管理员功能）
+func (s *UserService) UpdateUserStatus(userID uint, newStatus string) error {
+	if s.db == nil {
+		return errors.New("database connection not initialized")
+	}
+
+	// 验证状态是否有效
+	validStatuses := []string{"active", "inactive", "suspended", "deleted"}
+	isValidStatus := false
+	for _, status := range validStatuses {
+		if status == newStatus {
+			isValidStatus = true
+			break
+		}
+	}
+
+	if !isValidStatus {
+		return errors.New("invalid status. Valid statuses are: active, inactive, suspended, deleted")
+	}
+
+	// 更新用户状态
+	result := s.db.Model(&models.User{}).Where("id = ?", userID).Update("status", newStatus)
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.New("user not found")
+	}
+
+	return nil
+}

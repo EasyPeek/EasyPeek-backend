@@ -23,3 +23,9 @@ cors:
     - "http://localhost:8080"
     - "*"
 
+# 管理员初始化配置 (也可以通过环境变量设置)
+admin:
+  email: "admin@easypeek.com"
+  username: "admin" 
+  password: "admin123456" # 请在生产环境中更改默认密码
+
