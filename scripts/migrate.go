@@ -78,15 +78,15 @@ func checkDockerContainer() {
 // 构建数据库连接字符串
 func buildDSN() string {
 	// 默认配置
-	dsn := "host=localhost user=postgres password=password dbname=easypeek port=5432 sslmode=disable TimeZone=Asia/Shanghai"
+	dsn := "host=localhost user=postgres password=PostgresPassword dbname=easypeekdb port=5432 sslmode=disable TimeZone=Asia/Shanghai"
 
 	// 如果有环境变量，使用环境变量
 	if dbHost := os.Getenv("DB_HOST"); dbHost != "" {
 		dsn = fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Shanghai",
 			getEnv("DB_HOST", "localhost"),
 			getEnv("DB_USER", "postgres"),
-			getEnv("DB_PASSWORD", "password"),
-			getEnv("DB_NAME", "easypeek"),
+			getEnv("DB_PASSWORD", "PostgresPassword"),
+			getEnv("DB_NAME", "easypeekdb"),
 			getEnv("DB_PORT", "5432"),
 			getEnv("DB_SSLMODE", "disable"),
 		)

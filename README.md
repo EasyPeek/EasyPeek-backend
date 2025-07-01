@@ -52,3 +52,14 @@ go run cmd/link-news-to-events/main.go
 验证数据是否正确导入：
 # 验证数据导入
 go run cmd/verify/main.go
+
+6️⃣ 事件数据清空与重新生成
+如需清空事件数据并根据新闻自动生成新事件：
+# 清空所有事件数据
+go run cmd/clear-events/main.go
+
+# 根据新闻数据自动生成事件JSON
+go run cmd/generate-events-from-news/main.go
+
+# 导入生成的事件数据
+go run cmd/import-generated-events/main.go
