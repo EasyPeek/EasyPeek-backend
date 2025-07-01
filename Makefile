@@ -1,7 +1,7 @@
 # postgres
 launch_postgres:
 	@echo "Launching PostgreSQL..."
-	docker run --name postgres_easypeak \
+	docker run --name postgres_easypeek \
 	-e POSTGRES_USER=postgres \
 	-e POSTGRES_PASSWORD=PostgresPassword \
 	-e POSTGRES_DB=easypeekdb \
@@ -12,7 +12,7 @@ launch_postgres:
 # redis
 launch_redis:
 	@echo "Launching Redis..."
-	docker run --name redis_easypeak \
+	docker run --name redis_easypeek \
 	-p 6379:6379 \
 	-d redis
 	@echo "Redis launched successfully."
