@@ -24,6 +24,7 @@ func SetupRoutes() *gin.Engine {
 	eventHandler := NewEventHandler()
 	rssHandler := NewRSSHandler()
 	adminHandler := NewAdminHandler()
+	newsHandler := NewNewsHandler()
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")
@@ -46,6 +47,24 @@ func SetupRoutes() *gin.Engine {
 			user.POST("/change-password", userHandler.ChangePassword)
 			// 用户自删除账户
 			user.DELETE("/me", userHandler.DeleteSelf)
+		}
+
+		// news routes
+		news := v1.Group("/news")
+		{
+			// 公开路由 - 前端可以直接访问
+			news.GET("", newsHandler.GetAllNews)        // 获取所有新闻列表（带分页）
+			news.GET("/:id", newsHandler.GetNewsByID)   // 根据ID获取单条新闻
+			news.GET("/search", newsHandler.SearchNews) // 搜索新闻
+
+			// 需要身份验证的路由
+			authNews := news.Group("")
+			authNews.Use(middleware.AuthMiddleware())
+			{
+				authNews.POST("", newsHandler.CreateNews)       // 创建新闻
+				authNews.PUT("/:id", newsHandler.UpdateNews)    // 更新新闻
+				authNews.DELETE("/:id", newsHandler.DeleteNews) // 删除新闻
+			}
 		}
 
 		// event routes
