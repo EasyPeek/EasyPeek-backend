@@ -53,17 +53,23 @@ func SetupRoutes() *gin.Engine {
 		news := v1.Group("/news")
 		{
 			// 公开路由 - 前端可以直接访问
-			news.GET("", newsHandler.GetAllNews)        // 获取所有新闻列表（带分页）
-			news.GET("/:id", newsHandler.GetNewsByID)   // 根据ID获取单条新闻
-			news.GET("/search", newsHandler.SearchNews) // 搜索新闻
+			news.GET("", newsHandler.GetAllNews)                           // 获取所有新闻列表（带分页）
+			news.GET("/:id", newsHandler.GetNewsByID)                      // 根据ID获取单条新闻
+			news.GET("/search", newsHandler.SearchNews)                    // 搜索新闻
+			news.GET("/hot", newsHandler.GetHotNews)                       // 获取热门新闻
+			news.GET("/title", newsHandler.GetNewsByTitle)                 // 根据标题获取新闻
+			news.GET("/category/:category", newsHandler.GetNewsByCategory) // 根据分类获取新闻
+			news.GET("/unlinked", newsHandler.GetUnlinkedNews)             // 获取未关联事件的新闻
+			news.GET("/event/:event_id", newsHandler.GetNewsByEventID)     // 根据事件ID获取新闻
 
 			// 需要身份验证的路由
 			authNews := news.Group("")
 			authNews.Use(middleware.AuthMiddleware())
 			{
-				authNews.POST("", newsHandler.CreateNews)       // 创建新闻
-				authNews.PUT("/:id", newsHandler.UpdateNews)    // 更新新闻
-				authNews.DELETE("/:id", newsHandler.DeleteNews) // 删除新闻
+				authNews.POST("", newsHandler.CreateNews)                                  // 创建新闻
+				authNews.PUT("/:id", newsHandler.UpdateNews)                               // 更新新闻
+				authNews.DELETE("/:id", newsHandler.DeleteNews)                            // 删除新闻
+				authNews.PUT("/event-association", newsHandler.UpdateNewsEventAssociation) // 批量更新新闻事件关联
 			}
 		}
 

@@ -79,11 +79,14 @@ func (s *SeedService) SeedNewsFromJSON(jsonFilePath string) error {
 		return fmt.Errorf("failed to read JSON file: %w", err)
 	}
 
-	// 解析JSON数据
-	var newsDataList []NewsJSONData
-	if err := json.Unmarshal(jsonData, &newsDataList); err != nil {
+	// 解析JSON数据 - 处理converted_news_data.json的格式
+	var jsonWrapper struct {
+		NewsItems []NewsJSONData `json:"news_items"`
+	}
+	if err := json.Unmarshal(jsonData, &jsonWrapper); err != nil {
 		return fmt.Errorf("failed to parse JSON data: %w", err)
 	}
+	newsDataList := jsonWrapper.NewsItems
 
 	log.Printf("成功解析JSON文件，找到 %d 条新闻记录", len(newsDataList))
 
@@ -190,9 +193,12 @@ func (s *SeedService) SeedAllData() error {
 	log.Println("开始初始化种子数据...")
 
 	// 导入新闻数据
-	if err := s.SeedNewsFromJSON("data/new.json"); err != nil {
+	if err := s.SeedNewsFromJSON("converted_news_data.json"); err != nil {
 		return fmt.Errorf("failed to seed news data: %w", err)
 	}
+
+	// 导入新闻完成（事件生成可通过API调用）
+	log.Println("新闻导入完成！可通过API POST /api/v1/admin/events/generate 生成事件")
 
 	// 在这里可以添加其他类型的数据导入，例如：
 	// - 用户数据

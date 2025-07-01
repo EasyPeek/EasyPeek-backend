@@ -320,3 +320,65 @@ func (s *NewsService) GetUnlinkedNews(page, pageSize int) ([]models.News, int64,
 
 	return newsList, total, nil
 }
+
+// GetNewsByCategory 根据分类获取新闻，支持分页
+func (s *NewsService) GetNewsByCategory(category string, page, pageSize int) ([]models.News, int64, error) {
+	// 检查数据库连接是否已初始化
+	if s.db == nil {
+		return nil, 0, errors.New("database connection not initialized")
+	}
+
+	var newsList []models.News
+	var total int64
+
+	// 构建分类查询
+	dbQuery := s.db.Model(&models.News{}).Where("category = ?", category)
+
+	// 计算符合条件的记录总数
+	if err := dbQuery.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count news by category: %w", err)
+	}
+
+	// 计算分页偏移量
+	offset := (page - 1) * pageSize
+	if offset < 0 {
+		offset = 0
+	}
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+
+	// 执行带分页的分类查询
+	if err := dbQuery.Order("created_at desc").
+		Offset(offset).Limit(pageSize).
+		Find(&newsList).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to get news by category: %w", err)
+	}
+
+	return newsList, total, nil
+}
+
+// GetHotNews 获取热门新闻，按热度分数排序
+func (s *NewsService) GetHotNews(limit int) ([]models.News, error) {
+	// 检查数据库连接是否已初始化
+	if s.db == nil {
+		return nil, errors.New("database connection not initialized")
+	}
+
+	// 设置默认限制
+	if limit <= 0 {
+		limit = 10
+	}
+
+	var newsList []models.News
+
+	// 按热度分数降序排列获取热门新闻
+	if err := s.db.Where("is_active = ?", true).
+		Order("hotness_score desc, view_count desc, like_count desc, created_at desc").
+		Limit(limit).
+		Find(&newsList).Error; err != nil {
+		return nil, fmt.Errorf("failed to get hot news: %w", err)
+	}
+
+	return newsList, nil
+}

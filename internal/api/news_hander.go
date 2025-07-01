@@ -213,3 +213,171 @@ func (h *NewsHandler) SearchNews(c *gin.Context) {
 	// 返回带分页信息成功的响应
 	utils.SuccessWithPagination(c, newsResponses, total, page, size)
 }
+
+// GetNewsByTitle 根据标题获取新闻
+func (h *NewsHandler) GetNewsByTitle(c *gin.Context) {
+	title := c.Query("title")
+	if title == "" {
+		utils.BadRequest(c, "Title parameter is required")
+		return
+	}
+
+	newsList, err := h.newsService.GetNewsByTitle(title)
+	if err != nil {
+		utils.InternalServerError(c, err.Error())
+		return
+	}
+
+	var newsResponses []models.NewsResponse
+	for _, news := range newsList {
+		newsResponses = append(newsResponses, news.ToResponse())
+	}
+
+	utils.Success(c, newsResponses)
+}
+
+// GetNewsByCategory 根据分类获取新闻
+func (h *NewsHandler) GetNewsByCategory(c *gin.Context) {
+	category := c.Param("category")
+	if category == "" {
+		utils.BadRequest(c, "Category is required")
+		return
+	}
+
+	// 获取分页参数
+	pageStr := c.DefaultQuery("page", "1")
+	sizeStr := c.DefaultQuery("size", "10")
+
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		page = 1
+	}
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil || size < 1 || size > 100 {
+		size = 10
+	}
+
+	// 使用按分类查询的服务方法
+	newsList, total, err := h.newsService.GetNewsByCategory(category, page, size)
+	if err != nil {
+		utils.InternalServerError(c, err.Error())
+		return
+	}
+
+	var newsResponses []models.NewsResponse
+	for _, news := range newsList {
+		newsResponses = append(newsResponses, news.ToResponse())
+	}
+
+	utils.SuccessWithPagination(c, newsResponses, total, page, size)
+}
+
+// GetUnlinkedNews 获取未关联事件的新闻
+func (h *NewsHandler) GetUnlinkedNews(c *gin.Context) {
+	// 获取分页参数
+	pageStr := c.DefaultQuery("page", "1")
+	sizeStr := c.DefaultQuery("size", "10")
+
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		page = 1
+	}
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil || size < 1 || size > 100 {
+		size = 10
+	}
+
+	newsList, total, err := h.newsService.GetUnlinkedNews(page, size)
+	if err != nil {
+		utils.InternalServerError(c, err.Error())
+		return
+	}
+
+	var newsResponses []models.NewsResponse
+	for _, news := range newsList {
+		newsResponses = append(newsResponses, news.ToResponse())
+	}
+
+	utils.SuccessWithPagination(c, newsResponses, total, page, size)
+}
+
+// UpdateNewsEventAssociation 批量更新新闻事件关联
+func (h *NewsHandler) UpdateNewsEventAssociation(c *gin.Context) {
+	var req struct {
+		NewsIDs []uint `json:"news_ids" binding:"required"`
+		EventID *uint  `json:"event_id"` // 可为空，表示取消关联
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Invalid request data: "+err.Error())
+		return
+	}
+
+	if len(req.NewsIDs) == 0 {
+		utils.BadRequest(c, "News IDs cannot be empty")
+		return
+	}
+
+	err := h.newsService.UpdateNewsEventAssociationByIDs(req.NewsIDs, req.EventID)
+	if err != nil {
+		if err.Error() == "没有新闻被更新，请检查新闻ID是否正确" {
+			utils.BadRequest(c, err.Error())
+		} else {
+			utils.InternalServerError(c, err.Error())
+		}
+		return
+	}
+
+	message := "News event association updated successfully"
+	if req.EventID == nil {
+		message = "News event association removed successfully"
+	}
+
+	utils.Success(c, gin.H{"message": message})
+}
+
+// GetNewsByEventID 根据事件ID获取关联的新闻
+func (h *NewsHandler) GetNewsByEventID(c *gin.Context) {
+	eventIDStr := c.Param("event_id")
+	eventID, err := strconv.ParseUint(eventIDStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "Invalid event ID")
+		return
+	}
+
+	newsList, err := h.newsService.GetNewsByEventID(uint(eventID))
+	if err != nil {
+		utils.InternalServerError(c, err.Error())
+		return
+	}
+
+	var newsResponses []models.NewsResponse
+	for _, news := range newsList {
+		newsResponses = append(newsResponses, news.ToResponse())
+	}
+
+	utils.Success(c, newsResponses)
+}
+
+// GetHotNews 获取热门新闻
+func (h *NewsHandler) GetHotNews(c *gin.Context) {
+	// 获取limit参数，默认为10
+	limitStr := c.DefaultQuery("limit", "10")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 || limit > 100 {
+		limit = 10 // 限制最大100条
+	}
+
+	newsList, err := h.newsService.GetHotNews(limit)
+	if err != nil {
+		utils.InternalServerError(c, err.Error())
+		return
+	}
+
+	var newsResponses []models.NewsResponse
+	for _, news := range newsList {
+		newsResponses = append(newsResponses, news.ToResponse())
+	}
+
+	utils.Success(c, newsResponses)
+}
