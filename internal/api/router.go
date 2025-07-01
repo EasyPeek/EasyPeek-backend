@@ -5,7 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRoutes() *gin.Engine {
+func SetupRoutes(aiService *ai.AIService, newsService *services.NewsService) *gin.Engine {
 	r := gin.Default()
 
 	// add cors middleware
@@ -24,6 +24,7 @@ func SetupRoutes() *gin.Engine {
 	eventHandler := NewEventHandler()
 	rssHandler := NewRSSHandler()
 	newsHandler := NewNewsHandler() // 添加新闻处理器
+	aiHandler := NewAIHandler(aiService, newsService)
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")
@@ -131,6 +132,7 @@ func SetupRoutes() *gin.Engine {
 			news.GET("", newsHandler.GetAllNews)
 			news.GET("/:id", newsHandler.GetNewsByID)
 			news.GET("/event/:eventId", newsHandler.GetNewsByEventID) // 根据事件ID获取相关新闻
+			news.POST("/:id/summarize", aiHandler.SummarizeNews) // 总结新闻
 
 			// 需要身份验证的路由
 			authNews := news.Group("")

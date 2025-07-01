@@ -8,10 +8,17 @@ import (
 )
 
 type Config struct {
-	Database DatabaseConfig `mapstructure:"database"`
-	Redis    RedisConfig    `mapstructure:"redis"`
-	JWT      JWTConfig      `mapstructure:"jwt"`
-	CORS     CORSConfig     `mapstructure:"cors"`
+	Database   DatabaseConfig   `mapstructure:"database"`
+	Redis      RedisConfig      `mapstructure:"redis"`
+	JWT        JWTConfig        `mapstructure:"jwt"`
+	CORS       CORSConfig       `mapstructure:"cors"`
+	OpenRouter OpenRouterConfig `mapstructure:"open_router"`
+}
+
+type OpenRouterConfig struct {
+	APIKey  string `yaml:"api_key"`
+	APIHost string `yaml:"api_host"`
+	Model   string `yaml:"model"`
 }
 
 var AppConfig *Config
