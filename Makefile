@@ -16,3 +16,28 @@ launch_redis:
 	-p 6379:6379 \
 	-d redis
 	@echo "Redis launched successfully."
+
+# 运行应用
+run:
+	@echo "Starting EasyPeek backend..."
+	go run cmd/main.go
+
+# 创建admin用户
+create-admin:
+	@echo "Creating admin user..."
+	@echo "This will create an admin user with default credentials:"
+	@echo "Username: admin"
+	@echo "Email: admin@easypeek.com"
+	@echo "Password: admin123456"
+	@echo "Make sure database is running first!"
+	go run cmd/main.go --seed-admin-only
+
+# 构建项目
+build:
+	@echo "Building EasyPeek backend..."
+	go build -o bin/easypeek cmd/main.go
+
+# 清理
+clean:
+	@echo "Cleaning up..."
+	rm -rf bin/

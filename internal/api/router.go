@@ -20,10 +20,10 @@ func SetupRoutes() *gin.Engine {
 	})
 
 	// initialize handler
+	adminHandler := NewAdminHandler()
 	userHandler := NewUserHandler()
 	eventHandler := NewEventHandler()
 	rssHandler := NewRSSHandler()
-	adminHandler := NewAdminHandler()
 	newsHandler := NewNewsHandler()
 
 	// API v1 routes

@@ -229,7 +229,7 @@ func (s *SeedService) SeedInitialAdmin() error {
 
 	adminPassword := os.Getenv("ADMIN_PASSWORD")
 	if adminPassword == "" {
-		adminPassword = "admin123456" // 默认密码，生产环境应该修改
+		adminPassword = "admin123456"
 	}
 
 	adminUsername := os.Getenv("ADMIN_USERNAME")

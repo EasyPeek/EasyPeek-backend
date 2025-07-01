@@ -32,18 +32,18 @@ func main() {
 	// execute database migration
 	if err := database.Migrate(
 		&models.User{},
+		&models.News{},
 		&models.Event{},
 		&models.RSSSource{},
-		&models.News{}, // 统一的新闻模型，支持手动创建和RSS抓取
 	); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
 	// initialize seed data
 	seedService := services.NewSeedService()
+
 	if err := seedService.SeedDefaultData(); err != nil {
 		log.Printf("Warning: Failed to seed initial data: %v", err)
-
 	}
 
 	// initialize RSS scheduler
@@ -65,7 +65,6 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// 优雅关闭
 	go func() {
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -80,11 +79,8 @@ func main() {
 	}()
 
 	log.Println("Server is starting on :8080")
-	log.Println("API documentation available at: http://localhost:8080/swagger/index.html")
-	log.Println("Health check available at: http://localhost:8080/health")
 	log.Println("RSS scheduler is running")
 
-	// start server
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Failed to start server: %v", err)
 	}
