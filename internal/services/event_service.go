@@ -3,6 +3,10 @@ package services
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"math"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/EasyPeek/EasyPeek-backend/internal/database"
@@ -782,4 +786,481 @@ func (s *EventService) GetEventStats(eventID uint) (*models.InteractionStatsResp
 		ShareCount:   event.ShareCount,
 		HotnessScore: event.HotnessScore,
 	}, nil
+}
+
+// EventCluster 表示一个事件聚类
+type EventCluster struct {
+	Title        string
+	Description  string
+	Category     string
+	StartTime    time.Time
+	EndTime      time.Time
+	Location     string
+	Status       string
+	Tags         []string
+	Source       string
+	NewsList     []models.News
+	HotnessScore float64
+}
+
+// EventGenerationResult 事件生成结果
+type EventGenerationResult struct {
+	GeneratedEvents   []models.EventResponse `json:"generated_events"`
+	TotalEvents       int                    `json:"total_events"`
+	ProcessedNews     int                    `json:"processed_news"`
+	GenerationTime    time.Time              `json:"generation_time"`
+	ElapsedTime       string                 `json:"elapsed_time"`
+	CategoryBreakdown map[string]int         `json:"category_breakdown"`
+}
+
+// GenerateEventsFromNews 从新闻自动生成事件
+func (s *EventService) GenerateEventsFromNews() (*EventGenerationResult, error) {
+	startTime := time.Now()
+
+	// 1. 获取所有新闻
+	var allNews []models.News
+	if err := s.db.Find(&allNews).Error; err != nil {
+		return nil, fmt.Errorf("获取新闻列表失败: %w", err)
+	}
+
+	if len(allNews) == 0 {
+		return nil, errors.New("数据库中没有新闻，无法生成事件")
+	}
+
+	// 2. 根据分类将新闻分组
+	categoryNews := make(map[string][]models.News)
+	for _, news := range allNews {
+		if news.Category == "" {
+			news.Category = "未分类"
+		}
+		categoryNews[news.Category] = append(categoryNews[news.Category], news)
+	}
+
+	// 3. 为每个分类生成事件聚类
+	allEventClusters := make([]*EventCluster, 0)
+	categoryBreakdown := make(map[string]int)
+
+	for category, newsList := range categoryNews {
+		// 对每个分类内的新闻进行简单聚类
+		clusters := s.clusterNewsByTitle(newsList)
+		categoryBreakdown[category] = len(clusters)
+		allEventClusters = append(allEventClusters, clusters...)
+	}
+
+	// 4. 按热度对事件聚类排序
+	sort.Slice(allEventClusters, func(i, j int) bool {
+		return allEventClusters[i].HotnessScore > allEventClusters[j].HotnessScore
+	})
+
+	// 5. 转换聚类为事件并保存到数据库
+	generatedEvents := make([]models.EventResponse, 0)
+	newsService := NewNewsService() // 创建新闻服务实例
+
+	for _, cluster := range allEventClusters {
+		event := s.convertClusterToEvent(cluster)
+
+		// 保存事件到数据库
+		savedEvent, err := s.CreateEvent(&event)
+		if err != nil {
+			return nil, fmt.Errorf("保存事件失败: %w", err)
+		}
+
+		// 更新关联新闻的事件ID
+		newsIDs := make([]uint, 0)
+		for _, news := range cluster.NewsList {
+			newsIDs = append(newsIDs, news.ID)
+		}
+
+		if err := newsService.UpdateNewsEventAssociation(newsIDs, savedEvent.ID); err != nil {
+			return nil, fmt.Errorf("更新新闻关联失败: %w", err)
+		}
+
+		generatedEvents = append(generatedEvents, *savedEvent)
+	}
+
+	elapsed := time.Since(startTime)
+	return &EventGenerationResult{
+		GeneratedEvents:   generatedEvents,
+		TotalEvents:       len(generatedEvents),
+		ProcessedNews:     len(allNews),
+		GenerationTime:    time.Now(),
+		ElapsedTime:       elapsed.String(),
+		CategoryBreakdown: categoryBreakdown,
+	}, nil
+}
+
+// clusterNewsByTitle 根据标题相似度简单聚类新闻
+func (s *EventService) clusterNewsByTitle(newsList []models.News) []*EventCluster {
+	// 按发布时间排序
+	sort.Slice(newsList, func(i, j int) bool {
+		return newsList[i].PublishedAt.Before(newsList[j].PublishedAt)
+	})
+
+	clusters := make([]*EventCluster, 0)
+	processed := make(map[uint]bool)
+
+	// 对每个未处理的新闻，尝试创建或加入聚类
+	for i, news := range newsList {
+		if processed[news.ID] {
+			continue
+		}
+
+		// 创建新聚类
+		cluster := &EventCluster{
+			Title:        news.Title,
+			Description:  news.Summary,
+			Category:     news.Category,
+			StartTime:    news.PublishedAt,
+			EndTime:      news.PublishedAt.Add(24 * time.Hour), // 默认事件持续一天
+			Location:     "全国",                                 // 默认位置
+			Status:       "进行中",
+			Tags:         s.extractTags(news),
+			Source:       news.Source,
+			NewsList:     []models.News{news},
+			HotnessScore: float64(news.ViewCount + news.LikeCount*2 + news.CommentCount*3 + news.ShareCount*5),
+		}
+
+		// 查找相似的新闻加入此聚类
+		for j := i + 1; j < len(newsList); j++ {
+			if processed[newsList[j].ID] {
+				continue
+			}
+
+			// 如果标题相似度高，加入聚类
+			if s.areTitlesSimilar(news.Title, newsList[j].Title) {
+				cluster.NewsList = append(cluster.NewsList, newsList[j])
+				processed[newsList[j].ID] = true
+
+				// 更新聚类信息
+				if newsList[j].PublishedAt.Before(cluster.StartTime) {
+					cluster.StartTime = newsList[j].PublishedAt
+				}
+				if newsList[j].PublishedAt.After(cluster.EndTime) {
+					cluster.EndTime = newsList[j].PublishedAt
+				}
+
+				// 合并标签
+				newsTags := s.extractTags(newsList[j])
+				for _, tag := range newsTags {
+					if !s.contains(cluster.Tags, tag) {
+						cluster.Tags = append(cluster.Tags, tag)
+					}
+				}
+
+				// 累加热度分数
+				cluster.HotnessScore += float64(newsList[j].ViewCount + newsList[j].LikeCount*2 +
+					newsList[j].CommentCount*3 + newsList[j].ShareCount*5)
+			}
+		}
+
+		// 完善聚类信息
+		if len(cluster.Description) == 0 && len(cluster.NewsList) > 0 {
+			// 如果没有描述，使用第一条新闻的内容开头作为描述
+			for _, n := range cluster.NewsList {
+				if len(n.Content) > 10 {
+					// 使用内容的前100个字符作为描述
+					endPos := int(math.Min(100, float64(len(n.Content))))
+					cluster.Description = n.Content[:endPos] + "..."
+					break
+				}
+			}
+		}
+
+		// 更新状态
+		now := time.Now()
+		if cluster.EndTime.Before(now) {
+			cluster.Status = "已结束"
+		} else if cluster.StartTime.After(now) {
+			cluster.Status = "未开始"
+		}
+
+		// 将此聚类加入结果
+		clusters = append(clusters, cluster)
+		processed[news.ID] = true
+	}
+
+	return clusters
+}
+
+// areTitlesSimilar 检查两个标题是否相似（放宽标准，提高聚合程度）
+func (s *EventService) areTitlesSimilar(title1, title2 string) bool {
+	title1 = strings.ToLower(title1)
+	title2 = strings.ToLower(title2)
+
+	// 1. 检查地域关键词匹配
+	if s.hasRegionalMatch(title1, title2) {
+		return true
+	}
+
+	// 2. 检查主题关键词匹配
+	if s.hasTopicMatch(title1, title2) {
+		return true
+	}
+
+	// 3. 通用关键词相似度检查（降低阈值）
+	keywords1 := s.extractKeywords(title1)
+	keywords2 := s.extractKeywords(title2)
+
+	var matches int
+	var totalKeywords int
+
+	// 计算关键词匹配数
+	for _, kw1 := range keywords1 {
+		if len(kw1) < 2 {
+			continue
+		}
+		totalKeywords++
+		for _, kw2 := range keywords2 {
+			if len(kw2) < 2 {
+				continue
+			}
+			// 包含关系或编辑距离相似
+			if strings.Contains(kw1, kw2) || strings.Contains(kw2, kw1) || s.isSimilarKeyword(kw1, kw2) {
+				matches++
+				break // 避免重复计算
+			}
+		}
+	}
+
+	// 降低相似度阈值：只需要20%的关键词匹配或至少1个关键词匹配
+	minKeywords := int(math.Max(1, float64(totalKeywords)*0.2))
+	return matches >= minKeywords
+}
+
+// hasRegionalMatch 检查是否有地域关键词匹配
+func (s *EventService) hasRegionalMatch(title1, title2 string) bool {
+	// 定义地域关键词组
+	regionalGroups := map[string][]string{
+		"中东":   {"中东", "以色列", "巴勒斯坦", "伊朗", "叙利亚", "伊拉克", "沙特", "阿联酋", "黎巴嫩", "约旦", "也门", "卡塔尔", "科威特", "巴林", "阿曼"},
+		"俄乌":   {"俄罗斯", "乌克兰", "俄乌", "普京", "泽连斯基", "基辅", "莫斯科", "顿巴斯", "克里米亚", "哈尔科夫", "马里乌波尔"},
+		"朝鲜半岛": {"朝鲜", "韩国", "金正恩", "文在寅", "尹锡悦", "平壤", "首尔", "三八线", "板门店"},
+		"南海":   {"南海", "台海", "台湾", "南沙", "西沙", "钓鱼岛", "尖阁诸岛"},
+		"欧洲":   {"欧盟", "英国", "法国", "德国", "意大利", "西班牙", "荷兰", "比利时", "瑞士", "奥地利", "波兰", "捷克"},
+		"美洲":   {"美国", "加拿大", "墨西哥", "巴西", "阿根廷", "智利", "哥伦比亚", "委内瑞拉"},
+		"非洲":   {"埃及", "南非", "尼日利亚", "肯尼亚", "摩洛哥", "阿尔及利亚", "利比亚", "苏丹", "埃塞俄比亚"},
+		"东南亚":  {"越南", "泰国", "新加坡", "马来西亚", "印尼", "菲律宾", "缅甸", "柬埔寨", "老挝"},
+		"南亚":   {"印度", "巴基斯坦", "孟加拉国", "斯里兰卡", "尼泊尔", "不丹", "马尔代夫"},
+	}
+
+	// 检查两个标题是否属于同一地域
+	for _, keywords := range regionalGroups {
+		found1, found2 := false, false
+		for _, keyword := range keywords {
+			if strings.Contains(title1, keyword) {
+				found1 = true
+			}
+			if strings.Contains(title2, keyword) {
+				found2 = true
+			}
+		}
+		if found1 && found2 {
+			return true
+		}
+	}
+
+	return false
+}
+
+// hasTopicMatch 检查是否有主题关键词匹配
+func (s *EventService) hasTopicMatch(title1, title2 string) bool {
+	// 定义主题关键词组
+	topicGroups := map[string][]string{
+		"经济": {"经济", "GDP", "通胀", "利率", "股市", "汇率", "贸易", "投资", "金融", "央行", "货币", "市场", "企业", "公司"},
+		"科技": {"科技", "AI", "人工智能", "5G", "芯片", "半导体", "互联网", "数字", "智能", "技术", "创新", "研发"},
+		"政治": {"政治", "选举", "总统", "首相", "政府", "议会", "国会", "外交", "会谈", "峰会", "访问", "制裁"},
+		"军事": {"军事", "军队", "武器", "导弹", "战机", "军演", "防务", "安全", "冲突", "战争", "和平", "停火"},
+		"能源": {"能源", "石油", "天然气", "电力", "核能", "煤炭", "新能源", "太阳能", "风能", "电池"},
+		"环境": {"环境", "气候", "碳排放", "全球变暖", "污染", "环保", "绿色", "可持续", "减排"},
+		"健康": {"健康", "医疗", "疫苗", "病毒", "疫情", "医院", "药物", "治疗", "医生", "患者"},
+		"教育": {"教育", "学校", "大学", "学生", "老师", "考试", "学习", "培训", "课程"},
+		"体育": {"体育", "奥运", "世界杯", "足球", "篮球", "网球", "游泳", "田径", "运动员", "比赛"},
+		"文化": {"文化", "艺术", "电影", "音乐", "文学", "博物馆", "遗产", "传统", "节庆"},
+	}
+
+	// 检查两个标题是否属于同一主题
+	for _, keywords := range topicGroups {
+		found1, found2 := false, false
+		for _, keyword := range keywords {
+			if strings.Contains(title1, keyword) {
+				found1 = true
+			}
+			if strings.Contains(title2, keyword) {
+				found2 = true
+			}
+		}
+		if found1 && found2 {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isSimilarKeyword 检查两个关键词是否相似（编辑距离等）
+func (s *EventService) isSimilarKeyword(kw1, kw2 string) bool {
+	// 简单的相似度检查：长度相近且有公共子串
+	if math.Abs(float64(len(kw1)-len(kw2))) > 2 {
+		return false
+	}
+
+	// 检查是否有公共子串（长度>=2）
+	for i := 0; i <= len(kw1)-2; i++ {
+		substr := kw1[i : i+2]
+		if strings.Contains(kw2, substr) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// extractKeywords 从标题中提取关键词（增强版）
+func (s *EventService) extractKeywords(title string) []string {
+	title = strings.ToLower(title)
+
+	// 替换标点符号为空格
+	title = strings.ReplaceAll(title, "，", " ")
+	title = strings.ReplaceAll(title, "。", " ")
+	title = strings.ReplaceAll(title, "？", " ")
+	title = strings.ReplaceAll(title, "！", " ")
+	title = strings.ReplaceAll(title, "、", " ")
+	title = strings.ReplaceAll(title, "：", " ")
+	title = strings.ReplaceAll(title, "；", " ")
+	title = strings.ReplaceAll(title, ",", " ")
+	title = strings.ReplaceAll(title, ".", " ")
+	title = strings.ReplaceAll(title, "?", " ")
+	title = strings.ReplaceAll(title, "!", " ")
+	title = strings.ReplaceAll(title, ":", " ")
+	title = strings.ReplaceAll(title, ";", " ")
+	title = strings.ReplaceAll(title, "'", " ")
+	title = strings.ReplaceAll(title, "\"", " ")
+	title = strings.ReplaceAll(title, "(", " ")
+	title = strings.ReplaceAll(title, ")", " ")
+	title = strings.ReplaceAll(title, "（", " ")
+	title = strings.ReplaceAll(title, "）", " ")
+	title = strings.ReplaceAll(title, "[", " ")
+	title = strings.ReplaceAll(title, "]", " ")
+	title = strings.ReplaceAll(title, "【", " ")
+	title = strings.ReplaceAll(title, "】", " ")
+	title = strings.ReplaceAll(title, "《", " ")
+	title = strings.ReplaceAll(title, "》", " ")
+
+	words := strings.Split(title, " ")
+	result := make([]string, 0)
+
+	// 扩展停用词列表
+	stopWords := map[string]bool{
+		"的": true, "了": true, "是": true, "在": true, "有": true, "和": true, "与": true, "为": true, "将": true, "被": true, "把": true, "对": true, "向": true, "从": true, "到": true, "于": true, "以": true, "及": true, "或": true, "而": true, "且": true, "但": true, "不": true, "没": true, "无": true, "非": true,
+		"a": true, "an": true, "the": true, "to": true, "of": true, "for": true, "and": true, "or": true, "in": true, "on": true, "at": true, "by": true, "with": true, "from": true, "up": true, "about": true, "into": true, "through": true, "during": true, "before": true, "after": true, "above": true, "below": true, "between": true, "among": true, "this": true, "that": true, "these": true, "those": true,
+		"新闻": true, "报道": true, "消息": true, "最新": true, "今日": true, "昨日": true, "今天": true, "昨天": true, "明天": true, "本周": true, "上周": true, "下周": true, "本月": true, "上月": true, "下月": true, "今年": true, "去年": true, "明年": true,
+	}
+
+	for _, word := range words {
+		word = strings.TrimSpace(word)
+		// 保留长度>=2且不是停用词的词语
+		if len(word) >= 2 && !stopWords[word] {
+			result = append(result, word)
+		}
+	}
+
+	return result
+}
+
+// extractTags 从新闻中提取标签
+func (s *EventService) extractTags(news models.News) []string {
+	tags := make([]string, 0)
+
+	// 1. 从新闻的tags字段提取
+	if news.Tags != "" {
+		// 如果是JSON格式，解析
+		if strings.HasPrefix(news.Tags, "[") && strings.HasSuffix(news.Tags, "]") {
+			var parsedTags []string
+			if err := json.Unmarshal([]byte(news.Tags), &parsedTags); err == nil {
+				tags = append(tags, parsedTags...)
+			}
+		} else {
+			// 否则按逗号分割
+			for _, tag := range strings.Split(news.Tags, ",") {
+				tag = strings.TrimSpace(tag)
+				if tag != "" {
+					tags = append(tags, tag)
+				}
+			}
+		}
+	}
+
+	// 2. 添加分类作为标签
+	if news.Category != "" && !s.contains(tags, news.Category) {
+		tags = append(tags, news.Category)
+	}
+
+	// 3. 添加来源作为标签
+	if news.Source != "" && !s.contains(tags, news.Source) {
+		tags = append(tags, news.Source)
+	}
+
+	return tags
+}
+
+// contains 检查切片是否包含指定元素
+func (s *EventService) contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
+// convertClusterToEvent 将聚类转换为创建事件的请求
+func (s *EventService) convertClusterToEvent(cluster *EventCluster) models.CreateEventRequest {
+	// 生成详细内容
+	content := fmt.Sprintf("# %s\n\n## 事件概述\n\n%s\n\n## 相关新闻\n\n",
+		cluster.Title, cluster.Description)
+
+	links := make([]string, 0)
+	for _, news := range cluster.NewsList {
+		// 添加链接
+		if news.Link != "" {
+			links = append(links, news.Link)
+		}
+
+		// 添加新闻到内容
+		content += fmt.Sprintf("### %s\n\n", news.Title)
+		if news.Source != "" {
+			content += fmt.Sprintf("来源: %s   ", news.Source)
+		}
+		if !news.PublishedAt.IsZero() {
+			content += fmt.Sprintf("发布时间: %s\n\n", news.PublishedAt.Format("2006-01-02 15:04:05"))
+		} else {
+			content += "\n\n"
+		}
+
+		// 添加摘要或内容片段
+		if news.Summary != "" {
+			content += news.Summary + "\n\n"
+		} else if news.Content != "" {
+			// 使用内容的前200个字符作为摘要
+			endPos := int(math.Min(200, float64(len(news.Content))))
+			content += news.Content[:endPos]
+			if len(news.Content) > 200 {
+				content += "..."
+			}
+			content += "\n\n"
+		}
+	}
+
+	return models.CreateEventRequest{
+		Title:        cluster.Title,
+		Description:  cluster.Description,
+		Content:      content,
+		StartTime:    cluster.StartTime,
+		EndTime:      cluster.EndTime,
+		Location:     cluster.Location,
+		Category:     cluster.Category,
+		Tags:         cluster.Tags,
+		Source:       cluster.Source,
+		Author:       "系统自动生成",
+		RelatedLinks: links,
+	}
 }
