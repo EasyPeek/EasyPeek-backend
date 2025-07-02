@@ -3,6 +3,8 @@ package services
 import (
 	"errors"
 	"fmt" // 导入 fmt 包用于错误信息拼接
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/EasyPeek/EasyPeek-backend/internal/database" // 假设你的数据库连接在此处提供
@@ -421,4 +423,166 @@ func (s *NewsService) GetNewsByCategoryLatest(category string, limit int) ([]mod
 	}
 
 	return newsList, nil
+}
+
+// SmartSearchNews 智能搜索新闻，基于AI分析的关键词、标题和内容进行相似度匹配
+func (s *NewsService) SmartSearchNews(query string, page, pageSize int) ([]models.News, int64, error) {
+	// 检查数据库连接是否已初始化
+	if s.db == nil {
+		return nil, 0, errors.New("database connection not initialized")
+	}
+
+	var newsList []models.News
+	var total int64
+
+	// 构建智能搜索查询
+	searchQuery := "%" + query + "%"
+
+	// 基础查询：在标题、内容、摘要中搜索
+	baseQuery := s.db.Model(&models.News{}).
+		Where("title ILIKE ? OR content ILIKE ? OR summary ILIKE ?", searchQuery, searchQuery, searchQuery)
+
+	// 获取所有有AI分析的新闻，检查关键词匹配
+	var aiAnalysisResults []models.News
+	aiQuery := `
+		SELECT DISTINCT n.* FROM news n
+		INNER JOIN ai_analyses a ON (
+			(a.target_type = 'news' AND a.target_id = n.id) OR
+			(a.target_type = 'event' AND n.belonged_event_id = a.target_id)
+		)
+		WHERE a.keywords ILIKE ? OR a.summary ILIKE ?
+		ORDER BY n.published_at DESC
+	`
+
+	if err := s.db.Raw(aiQuery, searchQuery, searchQuery).Find(&aiAnalysisResults).Error; err != nil {
+		// 如果AI查询失败，仅使用基础查询
+		if err := baseQuery.Count(&total).Error; err != nil {
+			return nil, 0, fmt.Errorf("failed to count search results: %w", err)
+		}
+
+		offset := (page - 1) * pageSize
+		if offset < 0 {
+			offset = 0
+		}
+		if pageSize <= 0 {
+			pageSize = 10
+		}
+
+		if err := baseQuery.Offset(offset).Limit(pageSize).Order("published_at DESC").Find(&newsList).Error; err != nil {
+			return nil, 0, fmt.Errorf("failed to search news: %w", err)
+		}
+
+		return newsList, total, nil
+	}
+
+	// 合并基础搜索和AI搜索结果
+	var combinedResults []models.News
+	newsMap := make(map[uint]models.News)
+
+	// 添加基础搜索结果
+	var baseResults []models.News
+	if err := baseQuery.Find(&baseResults).Error; err == nil {
+		for _, news := range baseResults {
+			newsMap[news.ID] = news
+		}
+	}
+
+	// 添加AI搜索结果
+	for _, news := range aiAnalysisResults {
+		newsMap[news.ID] = news
+	}
+
+	// 转换为切片并排序
+	for _, news := range newsMap {
+		combinedResults = append(combinedResults, news)
+	}
+
+	// 按发布时间排序
+	sort.Slice(combinedResults, func(i, j int) bool {
+		return combinedResults[i].PublishedAt.After(combinedResults[j].PublishedAt)
+	})
+
+	total = int64(len(combinedResults))
+
+	// 分页处理
+	offset := (page - 1) * pageSize
+	if offset < 0 {
+		offset = 0
+	}
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+
+	end := offset + pageSize
+	if end > len(combinedResults) {
+		end = len(combinedResults)
+	}
+
+	if offset >= len(combinedResults) {
+		return []models.News{}, total, nil
+	}
+
+	newsList = combinedResults[offset:end]
+
+	return newsList, total, nil
+}
+
+// GetHotKeywords 获取热门关键词（基于AI分析结果）
+func (s *NewsService) GetHotKeywords(limit int) ([]string, error) {
+	if s.db == nil {
+		return nil, errors.New("database connection not initialized")
+	}
+
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+
+	// 查询最近的AI分析结果
+	var analyses []models.AIAnalysis
+	if err := s.db.Where("keywords IS NOT NULL AND keywords != ''").
+		Order("created_at DESC").
+		Limit(100).
+		Find(&analyses).Error; err != nil {
+		return nil, fmt.Errorf("failed to get AI analyses: %w", err)
+	}
+
+	// 统计关键词频次
+	keywordCount := make(map[string]int)
+	for _, analysis := range analyses {
+		if analysis.Keywords == "" {
+			continue
+		}
+
+		// 解析关键词（假设格式为逗号分隔）
+		keywords := strings.Split(analysis.Keywords, ",")
+		for _, keyword := range keywords {
+			keyword = strings.TrimSpace(keyword)
+			if len(keyword) > 1 && len(keyword) < 20 { // 过滤太短或太长的关键词
+				keywordCount[keyword]++
+			}
+		}
+	}
+
+	// 按频次排序
+	type keywordFreq struct {
+		keyword string
+		count   int
+	}
+
+	var sortedKeywords []keywordFreq
+	for keyword, count := range keywordCount {
+		sortedKeywords = append(sortedKeywords, keywordFreq{keyword, count})
+	}
+
+	sort.Slice(sortedKeywords, func(i, j int) bool {
+		return sortedKeywords[i].count > sortedKeywords[j].count
+	})
+
+	// 返回前N个关键词
+	var result []string
+	for i := 0; i < len(sortedKeywords) && i < limit; i++ {
+		result = append(result, sortedKeywords[i].keyword)
+	}
+
+	return result, nil
 }

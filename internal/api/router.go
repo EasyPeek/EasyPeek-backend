@@ -27,6 +27,7 @@ func SetupRoutes() *gin.Engine {
 	newsHandler := NewNewsHandler()
 	messageHandler := NewMessageHandler()
 	followHandler := NewFollowHandler()
+	aiHandler := NewAIHandler()
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")
@@ -81,12 +82,13 @@ func SetupRoutes() *gin.Engine {
 		{
 
 			// 公开路由 - 前端可以直接访问
-			news.GET("", newsHandler.GetAllNews)          // 获取所有新闻列表（带分页）
-			news.GET("/hot", newsHandler.GetHotNews)      // 获取热门新闻
-			news.GET("/latest", newsHandler.GetLatestNews) // 获取最新新闻
-			news.GET("/:id", newsHandler.GetNewsByID)     // 根据ID获取单条新闻
-			news.GET("/search", newsHandler.SearchNews)   // 搜索新闻
-
+			news.GET("", newsHandler.GetAllNews)                   // 获取所有新闻列表（带分页）
+			news.GET("/hot", newsHandler.GetHotNews)               // 获取热门新闻
+			news.GET("/latest", newsHandler.GetLatestNews)         // 获取最新新闻
+			news.GET("/:id", newsHandler.GetNewsByID)              // 根据ID获取单条新闻
+			news.GET("/search", newsHandler.SearchNews)            // 搜索新闻
+			news.GET("/smart-search", newsHandler.SmartSearchNews) // 智能搜索新闻
+			news.GET("/hot-keywords", newsHandler.GetHotKeywords)  // 获取热门关键词
 
 			// 需要身份验证的路由
 			authNews := news.Group("")
@@ -141,6 +143,23 @@ func SetupRoutes() *gin.Engine {
 			systemEvents.Use(middleware.RequireSystemOrAdmin())
 			{
 				systemEvents.PUT("/:id/hotness", eventHandler.UpdateEventHotness)
+			}
+		}
+
+		// AI routes
+		ai := v1.Group("/ai")
+		{
+			// 公开路由 - 允许前端直接调用
+			ai.GET("/analysis", aiHandler.GetAnalysis)        // 获取已有的分析结果
+			ai.GET("/stats", aiHandler.GetAnalysisStats)      // 获取AI分析统计
+			ai.POST("/analyze", aiHandler.AnalyzeNews)        // 分析新闻 - 改为公开
+			ai.POST("/analyze-event", aiHandler.AnalyzeEvent) // 分析事件 - 改为公开
+
+			// 需要身份验证的路由（仅管理功能）
+			authAI := ai.Group("")
+			authAI.Use(middleware.AuthMiddleware())
+			{
+				authAI.POST("/batch-analyze", aiHandler.BatchAnalyzeNews) // 批量分析新闻
 			}
 		}
 

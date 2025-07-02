@@ -74,3 +74,26 @@ func SuccessWithPagination(c *gin.Context, data interface{}, total int64, page, 
 		Size:    size,
 	})
 }
+
+// ErrorResponse 错误响应（带详细信息）
+func ErrorResponse(c *gin.Context, statusCode int, message string, details interface{}) {
+	response := Response{
+		Code:    statusCode,
+		Message: message,
+	}
+
+	if details != nil {
+		response.Data = gin.H{"details": details}
+	}
+
+	c.JSON(statusCode, response)
+}
+
+// SuccessResponse 成功响应（带消息和数据）
+func SuccessResponse(c *gin.Context, message string, data interface{}) {
+	c.JSON(http.StatusOK, Response{
+		Code:    200,
+		Message: message,
+		Data:    data,
+	})
+}

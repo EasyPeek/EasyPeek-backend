@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/EasyPeek/EasyPeek-backend/internal/config"
 	"github.com/EasyPeek/EasyPeek-backend/internal/database"
 	"github.com/EasyPeek/EasyPeek-backend/internal/models"
 	"github.com/EasyPeek/EasyPeek-backend/internal/utils"
@@ -15,14 +16,17 @@ import (
 )
 
 type RSSService struct {
-	db     *gorm.DB
-	parser *gofeed.Parser
+	db        *gorm.DB
+	parser    *gofeed.Parser
+	aiService *AIService
 }
 
 func NewRSSService() *RSSService {
+	db := database.GetDB()
 	return &RSSService{
-		db:     database.GetDB(),
-		parser: gofeed.NewParser(),
+		db:        db,
+		parser:    gofeed.NewParser(),
+		aiService: NewAIService(db),
 	}
 }
 
@@ -198,7 +202,7 @@ func (s *RSSService) DeleteRSSSource(id uint) error {
 // FetchRSSFeed 抓取单个RSS源的内容
 func (s *RSSService) FetchRSSFeed(sourceID uint) (*models.RSSFetchStats, error) {
 	log.Printf("[RSS DEBUG] Starting to fetch RSS feed for source ID: %d", sourceID)
-	
+
 	var source models.RSSSource
 	if err := s.db.First(&source, sourceID).Error; err != nil {
 		log.Printf("[RSS ERROR] Failed to find RSS source %d: %v", sourceID, err)
@@ -309,7 +313,7 @@ func (s *RSSService) FetchAllRSSFeeds() (*models.RSSFetchResult, error) {
 // processNewsItem 处理单个新闻条目
 func (s *RSSService) processNewsItem(source *models.RSSSource, item *gofeed.Item) (*models.News, bool, error) {
 	log.Printf("[RSS DEBUG] Processing news item: %s", item.Title)
-	
+
 	// 检查是否已存在
 	var existingItem models.News
 	isNew := false
@@ -395,6 +399,9 @@ func (s *RSSService) processNewsItem(source *models.RSSSource, item *gofeed.Item
 			return nil, false, err
 		}
 		log.Printf("[RSS DEBUG] Successfully created news item with ID: %d", newsItem.ID)
+
+		// 异步进行AI分析，只对新创建的新闻进行分析
+		go s.performAutoAIAnalysis(newsItem.ID)
 	} else {
 		// 更新现有记录
 		newsItem.ID = existingItem.ID
@@ -414,6 +421,62 @@ func (s *RSSService) processNewsItem(source *models.RSSSource, item *gofeed.Item
 	}
 
 	return &newsItem, isNew, nil
+}
+
+// performAutoAIAnalysis 自动执行AI分析（异步）
+func (s *RSSService) performAutoAIAnalysis(newsID uint) {
+	// 检查配置是否启用自动分析
+	if config.AppConfig == nil || !config.AppConfig.AI.AutoAnalysis.Enabled || !config.AppConfig.AI.AutoAnalysis.AnalyzeOnFetch {
+		log.Printf("[AI AUTO] Automatic analysis disabled in config")
+		return
+	}
+
+	log.Printf("[AI AUTO] Starting automatic AI analysis for news ID: %d", newsID)
+
+	// 设置AI分析选项
+	analysisOptions := models.AIAnalysisRequest{
+		Type:     models.AIAnalysisTypeNews,
+		TargetID: newsID,
+		Options: struct {
+			EnableSummary     bool `json:"enable_summary"`
+			EnableKeywords    bool `json:"enable_keywords"`
+			EnableSentiment   bool `json:"enable_sentiment"`
+			EnableTrends      bool `json:"enable_trends"`
+			EnableImpact      bool `json:"enable_impact"`
+			ShowAnalysisSteps bool `json:"show_analysis_steps"`
+		}{
+			EnableSummary:     true,  // 自动生成摘要
+			EnableKeywords:    true,  // 自动提取关键词
+			EnableSentiment:   true,  // 自动分析情感
+			EnableTrends:      false, // 不进行趋势预测（减少处理时间）
+			EnableImpact:      false, // 不进行影响力分析（减少处理时间）
+			ShowAnalysisSteps: false, // 不显示分析步骤（减少存储）
+		},
+	}
+
+	// 执行AI分析
+	analysis, err := s.aiService.AnalyzeNews(newsID, analysisOptions)
+	if err != nil {
+		log.Printf("[AI AUTO ERROR] Failed to analyze news ID %d: %v", newsID, err)
+		return
+	}
+
+	log.Printf("[AI AUTO] Successfully completed AI analysis for news ID: %d", newsID)
+
+	// 如果分析成功且有摘要，更新新闻的摘要字段
+	if analysis.Summary != "" {
+		var news models.News
+		if err := s.db.First(&news, newsID).Error; err == nil {
+			// 只在原摘要为空或AI生成的摘要更好时更新
+			if news.Summary == "" || len(news.Summary) < 50 {
+				if err := s.db.Model(&news).Update("summary", analysis.Summary).Error; err != nil {
+					log.Printf("[AI AUTO ERROR] Failed to update news summary for ID %d: %v", newsID, err)
+				} else {
+					log.Printf("[AI AUTO] Updated news summary for ID: %d", newsID)
+				}
+			}
+		}
+	}
 }
 
 // GetNews 获取新闻列表

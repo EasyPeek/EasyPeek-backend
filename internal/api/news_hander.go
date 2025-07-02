@@ -314,3 +314,65 @@ func (h *NewsHandler) GetNewsByCategory(c *gin.Context) {
 	// 返回成功响应
 	utils.Success(c, newsResponses)
 }
+
+// SmartSearchNews 智能搜索新闻
+func (h *NewsHandler) SmartSearchNews(c *gin.Context) {
+	// 获取查询参数中的搜索关键词
+	queryStr := c.Query("query")
+	if queryStr == "" {
+		utils.BadRequest(c, "Search query cannot be empty")
+		return
+	}
+
+	// 获取查询参数中的页码和每页大小，并设置默认值
+	pageStr := c.DefaultQuery("page", "1")
+	sizeStr := c.DefaultQuery("size", "10")
+
+	// 转换页码和每页大小为整数，并处理无效值
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		page = 1
+	}
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil || size < 1 || size > 100 {
+		size = 10
+	}
+
+	// 调用 NewsService 的 SmartSearchNews 方法进行智能搜索
+	newsList, total, err := h.newsService.SmartSearchNews(queryStr, page, size)
+	if err != nil {
+		utils.InternalServerError(c, err.Error())
+		return
+	}
+
+	// 将搜索结果转换为响应格式
+	var newsResponses []models.NewsResponse
+	for _, news := range newsList {
+		newsResponses = append(newsResponses, news.ToResponse())
+	}
+
+	// 返回带分页信息成功的响应
+	utils.SuccessWithPagination(c, newsResponses, total, page, size)
+}
+
+// GetHotKeywords 获取热门关键词
+func (h *NewsHandler) GetHotKeywords(c *gin.Context) {
+	// 获取查询参数中的限制数量，并设置默认值
+	limitStr := c.DefaultQuery("limit", "10")
+
+	// 转换限制数量为整数，并处理无效值
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit < 1 || limit > 50 {
+		limit = 10
+	}
+
+	// 调用 NewsService 的 GetHotKeywords 方法获取热门关键词
+	keywords, err := h.newsService.GetHotKeywords(limit)
+	if err != nil {
+		utils.InternalServerError(c, err.Error())
+		return
+	}
+
+	// 返回成功响应
+	utils.Success(c, keywords)
+}

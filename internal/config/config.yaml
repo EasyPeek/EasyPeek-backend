@@ -29,3 +29,22 @@ admin:
   username: "admin" 
   password: "admin123456" # 请在生产环境中更改默认密码
 
+# AI服务配置
+ai:
+  provider: "openrouter"
+  api_key: "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"
+  base_url: "https://openrouter.ai/api/v1"
+  model: "google/gemini-2.0-flash-exp:free" 
+  timeout: 30 
+  max_tokens: 2000
+  temperature: 0.7
+  site_url: "http://localhost:5173/" # 你的网站URL（可选）
+  site_name: "EasyPeek" 
+  # 自动分析配置
+  auto_analysis:
+    enabled: true # 是否启用自动AI分析
+    analyze_on_fetch: true # 在RSS抓取时即时分析
+    batch_process_interval: 10 # 批处理未分析新闻的间隔（分钟）
+    max_batch_size: 10 # 每次批处理的最大新闻数量
+    analysis_delay: 2 # 每个分析之间的延迟（秒）
+
