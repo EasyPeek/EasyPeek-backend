@@ -5,6 +5,7 @@ import (
 
 	"github.com/EasyPeek/EasyPeek-backend/internal/database"
 	"github.com/EasyPeek/EasyPeek-backend/internal/models"
+	"github.com/EasyPeek/EasyPeek-backend/internal/utils"
 	"gorm.io/gorm"
 )
 
@@ -17,6 +18,38 @@ func NewAdminService() *AdminService {
 		db: database.GetDB(),
 	}
 }
+
+// admin login
+func (s *AdminService) AdminLogin(req *models.LoginRequest) (*models.User, string, error) {
+	var user models.User
+	if err := s.db.Where("username = ?", req.Username).First(&user).Error; err != nil {
+		return nil, "", err
+	}
+
+	// check admin role
+	if user.Role != "admin" {
+		return nil, "", errors.New("only admin users can login")
+	}
+
+	// check user status
+	if user.Status != "active" {
+		return nil, "", errors.New("admin account is not active")
+	}
+
+	// check password
+	if !user.CheckPassword(req.Password) {
+		return nil, "", errors.New("invalid password")
+	}
+
+	token, err := utils.GenerateToken(user.ID, user.Username, user.Role)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return &user, token, nil
+}
+
+
 
 // ===== 用户管理相关 =====
 

@@ -257,32 +257,32 @@ func (h *UserHandler) DeleteSelf(c *gin.Context) {
 	})
 }
 
-// UpdateUserRole 更新用户角色（管理员功能）
-func (h *UserHandler) UpdateUserRole(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		utils.BadRequest(c, "Invalid user ID")
-		return
-	}
+// // UpdateUserRole 更新用户角色（管理员功能）
+// func (h *UserHandler) UpdateUserRole(c *gin.Context) {
+// 	idStr := c.Param("id")
+// 	id, err := strconv.Atoi(idStr)
+// 	if err != nil {
+// 		utils.BadRequest(c, "Invalid user ID")
+// 		return
+// 	}
 
-	var req models.UpdateUserRoleRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "Invalid request data: "+err.Error())
-		return
-	}
+// 	var req models.UpdateUserRoleRequest
+// 	if err := c.ShouldBindJSON(&req); err != nil {
+// 		utils.BadRequest(c, "Invalid request data: "+err.Error())
+// 		return
+// 	}
 
-	if err := h.userService.UpdateUserRole(uint(id), req.Role); err != nil {
-		if err.Error() == "user not found" {
-			utils.NotFound(c, err.Error())
-		} else {
-			utils.BadRequest(c, err.Error())
-		}
-		return
-	}
+// 	if err := h.userService.UpdateUserRole(uint(id), req.Role); err != nil {
+// 		if err.Error() == "user not found" {
+// 			utils.NotFound(c, err.Error())
+// 		} else {
+// 			utils.BadRequest(c, err.Error())
+// 		}
+// 		return
+// 	}
 
-	utils.Success(c, gin.H{"message": "User role updated successfully"})
-}
+// 	utils.Success(c, gin.H{"message": "User role updated successfully"})
+// }
 
 // UpdateUserStatus 更新用户状态（管理员功能）
 func (h *UserHandler) UpdateUserStatus(c *gin.Context) {
