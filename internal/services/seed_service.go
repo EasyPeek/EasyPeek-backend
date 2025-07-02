@@ -555,14 +555,36 @@ type EventGenerationConfig struct {
 	MaxTokens   int    `json:"max_tokens"`
 }
 
-// DefaultAIConfig 获取默认AI配置
+// DefaultAIConfig 获取默认AI配置（从环境变量加载）
 func DefaultAIConfig() *AIServiceConfig {
+	// 从环境变量读取API密钥
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey == "" {
+		log.Println("警告：未设置 OPENAI_API_KEY 环境变量，AI功能将使用模拟模式")
+	}
+
+	// 从环境变量读取其他配置，如果没有设置则使用默认值
+	provider := os.Getenv("AI_PROVIDER")
+	if provider == "" {
+		provider = "openai"
+	}
+
+	endpoint := os.Getenv("OPENAI_API_ENDPOINT")
+	if endpoint == "" {
+		endpoint = "https://api.openai.com/v1/chat/completions"
+	}
+
+	model := os.Getenv("OPENAI_MODEL")
+	if model == "" {
+		model = "gpt-3.5-turbo"
+	}
+
 	config := &AIServiceConfig{
-		Provider:    "openai",
-		APIKey:      "", // 需要通过环境变量 OPENAI_API_KEY 或 SetAIAPIKey 方法设置
-		APIEndpoint: "https://api.openai.com/v1/chat/completions",
-		Model:       "gpt-3.5-turbo",
-		MaxTokens:   200000,
+		Provider:    provider,
+		APIKey:      apiKey,
+		APIEndpoint: endpoint,
+		Model:       model,
+		MaxTokens:   2000,
 		Timeout:     30,
 		Enabled:     true,
 	}
