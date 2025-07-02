@@ -2,6 +2,7 @@
 package api
 
 import (
+	"fmt"
 	"strconv" // 用于字符串和数字转换
 
 	"github.com/EasyPeek/EasyPeek-backend/internal/models"   // 导入新闻模型和请求/响应结构体
@@ -218,7 +219,7 @@ func (h *NewsHandler) SearchNews(c *gin.Context) {
 func (h *NewsHandler) GetHotNews(c *gin.Context) {
 	// 获取查询参数中的限制数量，并设置默认值
 	limitStr := c.DefaultQuery("limit", "10")
-	
+
 	// 转换限制数量为整数，并处理无效值
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil || limit < 1 || limit > 100 {
@@ -246,7 +247,7 @@ func (h *NewsHandler) GetHotNews(c *gin.Context) {
 func (h *NewsHandler) GetLatestNews(c *gin.Context) {
 	// 获取查询参数中的限制数量，并设置默认值
 	limitStr := c.DefaultQuery("limit", "10")
-	
+
 	// 转换限制数量为整数，并处理无效值
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil || limit < 1 || limit > 100 {
@@ -255,6 +256,50 @@ func (h *NewsHandler) GetLatestNews(c *gin.Context) {
 
 	// 调用 NewsService 的 GetLatestNews 方法获取最新新闻
 	newsList, err := h.newsService.GetLatestNews(limit)
+	if err != nil {
+		utils.InternalServerError(c, err.Error())
+		return
+	}
+
+	// 将新闻列表转换为响应格式
+	var newsResponses []models.NewsResponse
+	for _, news := range newsList {
+		newsResponses = append(newsResponses, news.ToResponse())
+	}
+
+	// 返回成功响应
+	utils.Success(c, newsResponses)
+}
+
+// GetNewsByCategory 按分类获取新闻
+func (h *NewsHandler) GetNewsByCategory(c *gin.Context) {
+	// 从URL参数中获取分类
+	category := c.Param("category")
+	// 添加调试日志
+	fmt.Printf("Debug: Received category parameter: %s\n", category)
+	if category == "" {
+		utils.BadRequest(c, "Category cannot be empty")
+		return
+	}
+
+	// 获取查询参数中的限制数量和排序方式
+	limitStr := c.DefaultQuery("limit", "10")
+	sortBy := c.DefaultQuery("sort", "latest") // latest 或 hot
+
+	// 转换限制数量为整数，并处理无效值
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit < 1 || limit > 100 {
+		limit = 10
+	}
+
+	// 调用 NewsService 的按分类获取新闻方法
+	var newsList []models.News
+	if sortBy == "hot" {
+		newsList, err = h.newsService.GetNewsByCategoryHot(category, limit)
+	} else {
+		newsList, err = h.newsService.GetNewsByCategoryLatest(category, limit)
+	}
+
 	if err != nil {
 		utils.InternalServerError(c, err.Error())
 		return

@@ -77,13 +77,13 @@ func SetupRoutes() *gin.Engine {
 		// news routes
 		news := v1.Group("/news")
 		{
-			// 公开路由 - 前端可以直接访问
-			news.GET("", newsHandler.GetAllNews)           // 获取所有新闻列表（带分页）
-			news.GET("/hot", newsHandler.GetHotNews)       // 获取热门新闻
-			news.GET("/latest", newsHandler.GetLatestNews) // 获取最新新闻
-			news.GET("/:id", newsHandler.GetNewsByID)      // 根据ID获取单条新闻
-			news.GET("/search", newsHandler.SearchNews)    // 搜索新闻
 
+			news.GET("", newsHandler.GetAllNews)                           // 获取所有新闻列表（带分页）
+			news.GET("/hot", newsHandler.GetHotNews)                       // 获取热门新闻
+			news.GET("/latest", newsHandler.GetLatestNews)                 // 获取最新新闻
+			news.GET("/category/:category", newsHandler.GetNewsByCategory) // 按分类获取新闻
+			news.GET("/:id", newsHandler.GetNewsByID)                      // 根据ID获取单条新闻
+			news.GET("/search", newsHandler.SearchNews)                    // 搜索新闻
 			// 需要身份验证的路由
 			authNews := news.Group("")
 			authNews.Use(middleware.AuthMiddleware())
