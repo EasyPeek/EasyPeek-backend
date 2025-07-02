@@ -8,9 +8,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/EasyPeek/EasyPeek-backend/internal/ai"
 	"github.com/EasyPeek/EasyPeek-backend/internal/api"
 	"github.com/EasyPeek/EasyPeek-backend/internal/config"
-	"github.com/EasyPeek/EasyPeek-backend/internal/ai"
 	"github.com/EasyPeek/EasyPeek-backend/internal/database"
 	"github.com/EasyPeek/EasyPeek-backend/internal/models"
 	"github.com/EasyPeek/EasyPeek-backend/internal/scheduler"
@@ -58,7 +58,7 @@ func main() {
 	defer rssScheduler.Stop()
 
 	// initialize services
-	newsService := services.NewNewsService(database.DB)
+	newsService := services.NewNewsService()
 	aiService, err := ai.NewAIService(cfg)
 	if err != nil {
 		log.Fatalf("Failed to initialize AI service: %v", err)

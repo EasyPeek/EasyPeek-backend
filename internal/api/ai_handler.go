@@ -274,20 +274,20 @@ func (h *AIHandler) SummarizeNews(c *gin.Context) {
 		return
 	}
 
-	news, err := h.newsService.GetNewsByID(c.Request.Context(), uint(id))
+	news, err := h.newsService.GetNewsByID(uint(id))
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusNotFound, "News not found", err.Error())
 		return
 	}
 
 	// 使用AI服务进行总结
-	analysis, err := h.aiService.AnalyzeNews(news.ID, models.AIAnalysisRequest{
+	analysisReq := models.AIAnalysisRequest{
 		Type:     models.AIAnalysisTypeNews,
 		TargetID: news.ID,
-		Options: models.AIAnalysisOptions{
-			EnableSummary: true,
-		},
-	})
+	}
+	analysisReq.Options.EnableSummary = true
+
+	analysis, err := h.aiService.AnalyzeNews(news.ID, analysisReq)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusInternalServerError, "Failed to generate summary", err.Error())
 		return

@@ -705,8 +705,8 @@ func (h *EventHandler) GetNewsByEventID(c *gin.Context) {
 		return
 	}
 
-	// 获取相关新闻
-	newsList, err := h.newsService.GetNewsByEventID(uint(id))
+	// 获取相关新闻（不使用分页）
+	newsList, _, err := h.newsService.GetNewsByEventID(uint(id))
 	if err != nil {
 		utils.InternalServerError(c, "Failed to get news by event ID")
 		return
