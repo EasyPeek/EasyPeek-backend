@@ -27,6 +27,7 @@ func SetupRoutes(aiService *ai.AIService, newsService *services.NewsService) *gi
 	eventHandler := NewEventHandler()
 	rssHandler := NewRSSHandler()
 	newsHandler := NewNewsHandler()
+	commentHandler := NewCommentHandler()
 	messageHandler := NewMessageHandler()
 	followHandler := NewFollowHandler()
 	aiHandler := NewAIHandler(newsService)
@@ -101,6 +102,23 @@ func SetupRoutes(aiService *ai.AIService, newsService *services.NewsService) *gi
 				authNews.POST("", newsHandler.CreateNews)       // 创建新闻
 				authNews.PUT("/:id", newsHandler.UpdateNews)    // 更新新闻
 				authNews.DELETE("/:id", newsHandler.DeleteNews) // 删除新闻
+			}
+		}
+
+		// comment routes
+		comments := v1.Group("/comments")
+		{
+			// 公开路由
+			comments.GET("/:id", commentHandler.GetCommentByID)                // 根据ID获取单条评论
+			comments.GET("/news/:news_id", commentHandler.GetCommentsByNewsID) // 根据新闻ID获取评论列表
+			comments.GET("/user/:user_id", commentHandler.GetCommentsByUserID) // 根据用户ID获取评论列表
+
+			// 需要身份验证的路由
+			authComments := comments.Group("")
+			authComments.Use(middleware.AuthMiddleware())
+			{
+				authComments.POST("", commentHandler.CreateComment)       // 创建评论
+				authComments.DELETE("/:id", commentHandler.DeleteComment) // 删除评论
 			}
 		}
 
@@ -229,6 +247,13 @@ func SetupRoutes(aiService *ai.AIService, newsService *services.NewsService) *gi
 				news.GET("", adminHandler.GetAllNews)        // 获取所有新闻
 				news.PUT("/:id", adminHandler.UpdateNews)    // 更新新闻
 				news.DELETE("/:id", adminHandler.DeleteNews) // 删除新闻
+			}
+
+			// 评论管理
+			comments := admin.Group("/comments")
+			{
+				comments.GET("", commentHandler.GetAllComments)            // 获取所有评论
+				comments.DELETE("/:id", commentHandler.AdminDeleteComment) // 管理员删除评论（硬删除）
 			}
 
 			// RSS源管理
