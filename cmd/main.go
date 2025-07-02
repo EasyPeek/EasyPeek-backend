@@ -35,6 +35,7 @@ func main() {
 		&models.News{},
 		&models.Event{},
 		&models.RSSSource{},
+		&models.Comment{},
 		&models.Message{},
 		&models.Follow{},
 	); err != nil {
