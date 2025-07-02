@@ -37,28 +37,26 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// Register
 type RegisterRequest struct {
 	Username string `json:"username" binding:"required,min=3,max=20"`
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required,min=8"`
 }
 
+// UpdateUser
 type UpdateUserRequest struct {
 	Username string `json:"username" binding:"omitempty,min=3,max=20"`
 	Avatar   string `json:"avatar"`
 }
 
+// ChangePassword
 type ChangePasswordRequest struct {
 	OldPassword string `json:"old_password" binding:"required"`
 	NewPassword string `json:"new_password" binding:"required,min=8"`
 }
 
-// UpdateUserRoleRequest 更新用户角色请求
-type UpdateUserRoleRequest struct {
-	Role string `json:"role" binding:"required,oneof=user admin system"`
-}
-
-// UpdateUserStatusRequest 更新用户状态请求
+// UpdateUserStatus
 type UpdateUserStatusRequest struct {
 	Status string `json:"status" binding:"required,oneof=active inactive suspended deleted"`
 }

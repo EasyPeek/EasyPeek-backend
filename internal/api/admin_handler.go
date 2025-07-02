@@ -3,6 +3,7 @@ package api
 import (
 	"strconv"
 
+	"github.com/EasyPeek/EasyPeek-backend/internal/models"
 	"github.com/EasyPeek/EasyPeek-backend/internal/services"
 	"github.com/EasyPeek/EasyPeek-backend/internal/utils"
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,28 @@ func NewAdminHandler() *AdminHandler {
 		newsService:  services.NewNewsService(),
 		rssService:   services.NewRSSService(),
 	}
+}
+
+// 
+func (h *AdminHandler) AdminLogin(c *gin.Context) {
+	var req models.LoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Invalid request data: "+err.Error())
+		return
+	}
+
+	user, token, err := h.adminService.AdminLogin(&req)
+	if err != nil {
+		utils.Unauthorized(c, err.Error())
+		return
+	}
+
+	response := gin.H{
+		"user":  user.ToResponse(),
+		"token": token,
+	}
+
+	utils.Success(c, response)
 }
 
 // ===== 系统统计 =====
