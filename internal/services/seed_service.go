@@ -248,6 +248,10 @@ func (s *SeedService) SeedAllData() error {
 	if err := s.SeedNewsFromJSON("data/new.json"); err != nil {
 		return fmt.Errorf("failed to seed news data: %w", err)
 	}
+	
+	if err := s.SeedInitialAdmin(); err != nil {
+		return fmt.Errorf("failed to seed initial admin: %w", err)
+	}
 
 	// 检查是否启用事件生成，如果启用则在启动时生成事件
 	if s.enableEventGeneration {
