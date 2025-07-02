@@ -102,13 +102,16 @@ func (h *FollowHandler) RemoveFollow(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Event unfollowed successfully"})
 }
 
-// GetFollows 获取用户关注的事件列表
-// @Summary 获取关注列表
-// @Description 获取用户关注的事件列表
+// GetFollows 获取用户关注的事件列表（包含统计信息）
+// @Summary 获取关注列表和统计
+// @Description 获取用户关注的事件列表，支持分页，同时返回统计信息
 // @Tags follows
 // @Accept json
 // @Produce json
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(10)
 // @Success 200 {object} map[string]interface{} "success"
+// @Failure 400 {object} map[string]interface{} "bad request"
 // @Failure 401 {object} map[string]interface{} "unauthorized"
 // @Failure 500 {object} map[string]interface{} "internal server error"
 // @Router /api/v1/follows [get]
@@ -119,13 +122,32 @@ func (h *FollowHandler) GetFollows(c *gin.Context) {
 		return
 	}
 
-	follows, err := h.followService.GetUserFollows(userID.(uint))
+	// 获取查询参数
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+
+	// 参数验证
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 10
+	}
+
+	// 获取关注列表和统计信息
+	follows, total, err := h.followService.GetUserFollowsWithPagination(userID.(uint), page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"follows": follows})
+	c.JSON(http.StatusOK, gin.H{
+		"follows":     follows,
+		"total_count": total,
+		"page":        page,
+		"page_size":   pageSize,
+		"total_pages": (total + int64(pageSize) - 1) / int64(pageSize),
+	})
 }
 
 // CheckFollow 检查是否已关注某个事件
@@ -161,39 +183,6 @@ func (h *FollowHandler) CheckFollow(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"is_following": isFollowing})
 }
-
-// GetFollowStats 获取关注统计
-// @Summary 获取关注统计
-// @Description 获取用户的关注统计信息
-// @Tags follows
-// @Accept json
-// @Produce json
-// @Success 200 {object} map[string]interface{} "success"
-// @Failure 401 {object} map[string]interface{} "unauthorized"
-// @Failure 500 {object} map[string]interface{} "internal server error"
-// @Router /api/v1/follows/stats [get]
-func (h *FollowHandler) GetFollowStats(c *gin.Context) {
-	// 从JWT中获取用户ID
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-
-	// 获取关注统计
-	stats, err := h.followService.GetFollowStats(userID.(uint))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    stats,
-	})
-}
-
-
 
 // GetAvailableEvents 获取可关注的事件列表
 // @Summary 获取可关注的事件列表
