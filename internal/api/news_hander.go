@@ -2,6 +2,7 @@
 package api
 
 import (
+	"fmt"
 	"strconv" // 用于字符串和数字转换
 
 	"github.com/EasyPeek/EasyPeek-backend/internal/models"   // 导入新闻模型和请求/响应结构体
@@ -274,6 +275,8 @@ func (h *NewsHandler) GetLatestNews(c *gin.Context) {
 func (h *NewsHandler) GetNewsByCategory(c *gin.Context) {
 	// 从URL参数中获取分类
 	category := c.Param("category")
+	// 添加调试日志
+	fmt.Printf("Debug: Received category parameter: %s\n", category)
 	if category == "" {
 		utils.BadRequest(c, "Category cannot be empty")
 		return
