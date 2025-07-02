@@ -69,6 +69,11 @@ func (s *UserService) Login(req *models.LoginRequest) (*models.User, string, err
 		return nil, "", err
 	}
 
+	// check user role
+	if user.Role != "user" {
+		return nil, "", errors.New("only regular users can login")
+	}
+
 	// check user status
 	if user.Status != "active" {
 		return nil, "", errors.New("user account is not active")
@@ -87,6 +92,8 @@ func (s *UserService) Login(req *models.LoginRequest) (*models.User, string, err
 
 	return &user, token, nil
 }
+
+
 
 // get user by id
 func (s *UserService) GetUserByID(id uint) (*models.User, error) {

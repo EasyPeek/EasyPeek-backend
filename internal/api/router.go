@@ -36,6 +36,8 @@ func SetupRoutes() *gin.Engine {
 		{
 			auth.POST("/register", userHandler.Register)
 			auth.POST("/login", userHandler.Login)
+
+			auth.POST("/admin-login", adminHandler.AdminLogin) // 管理员登录
 			// auth.POST("/refresh", userHandler.RefreshToken)  // TODO: 实现token刷新
 			// auth.POST("/logout", userHandler.Logout)         // TODO: 实现登出
 		}
@@ -78,12 +80,14 @@ func SetupRoutes() *gin.Engine {
 		news := v1.Group("/news")
 		{
 
-			news.GET("", newsHandler.GetAllNews)                           // 获取所有新闻列表（带分页）
-			news.GET("/hot", newsHandler.GetHotNews)                       // 获取热门新闻
-			news.GET("/latest", newsHandler.GetLatestNews)                 // 获取最新新闻
-			news.GET("/category/:category", newsHandler.GetNewsByCategory) // 按分类获取新闻
-			news.GET("/:id", newsHandler.GetNewsByID)                      // 根据ID获取单条新闻
-			news.GET("/search", newsHandler.SearchNews)                    // 搜索新闻
+			// 公开路由 - 前端可以直接访问
+			news.GET("", newsHandler.GetAllNews)          // 获取所有新闻列表（带分页）
+			news.GET("/hot", newsHandler.GetHotNews)      // 获取热门新闻
+			news.GET("/latest", newsHandler.GetLatestNews) // 获取最新新闻
+			news.GET("/:id", newsHandler.GetNewsByID)     // 根据ID获取单条新闻
+			news.GET("/search", newsHandler.SearchNews)   // 搜索新闻
+
+
 			// 需要身份验证的路由
 			authNews := news.Group("")
 			authNews.Use(middleware.AuthMiddleware())
@@ -169,6 +173,9 @@ func SetupRoutes() *gin.Engine {
 		admin.Use(middleware.AuthMiddleware())
 		admin.Use(middleware.AdminAuthMiddleware())
 		{
+			// admin login
+			// admin.POST("/login", adminHandler.AdminLogin)
+
 			// 系统统计
 			admin.GET("/stats", adminHandler.GetSystemStats)
 
@@ -181,8 +188,8 @@ func SetupRoutes() *gin.Engine {
 				users.PUT("/:id", adminHandler.UpdateUser)       // 更新用户信息
 				users.DELETE("/:id", adminHandler.DeleteUser)    // 管理员删除用户（硬删除）
 				// 保留原有的单独角色和状态更新接口
-				users.PUT("/:id/role", userHandler.UpdateUserRole)     // 更新用户角色
-				users.PUT("/:id/status", userHandler.UpdateUserStatus) // 更新用户状态
+				// users.PUT("/:id/role", userHandler.UpdateUserRole)     // 更新用户角色
+				// users.PUT("/:id/status", userHandler.UpdateUserStatus) // 更新用户状态
 			}
 
 			// 事件管理
@@ -219,17 +226,6 @@ func SetupRoutes() *gin.Engine {
 			}
 		}
 
-		// 系统管理路由（需要系统权限）
-		system := v1.Group("/system")
-		system.Use(middleware.AuthMiddleware())
-		system.Use(middleware.RoleMiddleware(middleware.RoleSystem))
-		{
-			// 系统级用户管理
-			systemUsers := system.Group("/users")
-			{
-				systemUsers.PUT("/:id/role", userHandler.UpdateUserRole) // 系统级角色更新
-			}
-		}
 	}
 
 	return r
