@@ -35,6 +35,8 @@ func main() {
 		&models.News{},
 		&models.Event{},
 		&models.RSSSource{},
+		&models.Message{},
+		&models.Follow{},
 	); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
