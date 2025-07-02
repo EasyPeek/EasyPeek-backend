@@ -559,7 +559,7 @@ type EventGenerationConfig struct {
 func DefaultAIConfig() *AIServiceConfig {
 	config := &AIServiceConfig{
 		Provider:    "openai",
-		APIKey:      "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", // 可通过 SetAIAPIKey 方法修改
+		APIKey:      "", // 需要通过环境变量 OPENAI_API_KEY 或 SetAIAPIKey 方法设置
 		APIEndpoint: "https://api.openai.com/v1/chat/completions",
 		Model:       "gpt-3.5-turbo",
 		MaxTokens:   200000,
@@ -1487,7 +1487,7 @@ err := seedService.SeedAllData() // 导入新闻 + 自动生成事件
 
 // 2. 设置AI配置
 seedService := NewSeedService()
-seedService.SetAIAPIKey("sk-your-openai-api-key")
+seedService.SetAIAPIKey("your-openai-api-key")
 seedService.SetAIModel("gpt-4")
 seedService.SetAIProvider("openai")
 err := seedService.SeedAllData()
@@ -1495,7 +1495,7 @@ err := seedService.SeedAllData()
 // 3. 自定义AI配置
 aiConfig := &AIServiceConfig{
     Provider:    "openai",
-    APIKey:      "sk-your-api-key",
+    APIKey:      "your-api-key",
     APIEndpoint: "https://api.openai.com/v1/chat/completions",
     Model:       "gpt-3.5-turbo",
     MaxTokens:   2000,

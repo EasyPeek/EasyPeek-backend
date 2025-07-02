@@ -43,7 +43,7 @@ func main() {
 	// 3. 创建自定义AI配置（低置信度阈值）
 	customConfig := &services.AIServiceConfig{
 		Provider:    "openai",
-		APIKey:      "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",
+		APIKey:      "", // 需要设置有效的 OpenAI API 密钥
 		APIEndpoint: "https://api.openai.com/v1/chat/completions",
 		Model:       "gpt-3.5-turbo",
 		MaxTokens:   200000,
