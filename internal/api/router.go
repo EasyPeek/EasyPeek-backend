@@ -25,6 +25,8 @@ func SetupRoutes() *gin.Engine {
 	eventHandler := NewEventHandler()
 	rssHandler := NewRSSHandler()
 	newsHandler := NewNewsHandler()
+	messageHandler := NewMessageHandler()
+	followHandler := NewFollowHandler()
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")
@@ -51,15 +53,40 @@ func SetupRoutes() *gin.Engine {
 			user.DELETE("/me", userHandler.DeleteSelf)
 		}
 
+		// message routes
+		messages := v1.Group("/messages")
+		messages.Use(middleware.AuthMiddleware())
+		{
+			messages.GET("", messageHandler.GetMessages)                 // 获取消息列表
+			messages.GET("/unread-count", messageHandler.GetUnreadCount) // 获取未读消息数量
+			messages.PUT("/:id/read", messageHandler.MarkAsRead)         // 标记消息已读
+			messages.PUT("/read-all", messageHandler.MarkAllAsRead)      // 标记全部已读
+			messages.DELETE("/:id", messageHandler.DeleteMessage)        // 删除消息
+		}
+
+		// follow routes
+		follows := v1.Group("/follows")
+		follows.Use(middleware.AuthMiddleware())
+		{
+			follows.POST("", followHandler.AddFollow)                  // 添加关注
+			follows.DELETE("", followHandler.RemoveFollow)             // 取消关注
+			follows.GET("", followHandler.GetFollows)                  // 获取关注列表
+			follows.GET("/check", followHandler.CheckFollow)           // 检查是否已关注
+			follows.GET("/stats", followHandler.GetFollowStats)        // 获取关注统计
+			follows.GET("/events", followHandler.GetAvailableEvents)   // 获取可关注的事件列表
+		}
+
 		// news routes
 		news := v1.Group("/news")
 		{
+
 			// 公开路由 - 前端可以直接访问
 			news.GET("", newsHandler.GetAllNews)          // 获取所有新闻列表（带分页）
 			news.GET("/hot", newsHandler.GetHotNews)      // 获取热门新闻
 			news.GET("/latest", newsHandler.GetLatestNews) // 获取最新新闻
 			news.GET("/:id", newsHandler.GetNewsByID)     // 根据ID获取单条新闻
 			news.GET("/search", newsHandler.SearchNews)   // 搜索新闻
+
 
 			// 需要身份验证的路由
 			authNews := news.Group("")
@@ -190,6 +217,12 @@ func SetupRoutes() *gin.Engine {
 				rssAdmin.DELETE("/:id", adminHandler.DeleteRSSSource)      // 删除RSS源
 				rssAdmin.POST("/:id/fetch", adminHandler.FetchRSSFeed)     // 手动抓取RSS源
 				rssAdmin.POST("/fetch-all", adminHandler.FetchAllRSSFeeds) // 抓取所有RSS源
+			}
+
+			// 消息管理
+			messageAdmin := admin.Group("/messages")
+			{
+				messageAdmin.POST("", messageHandler.CreateMessage) // 创建系统消息
 			}
 		}
 
