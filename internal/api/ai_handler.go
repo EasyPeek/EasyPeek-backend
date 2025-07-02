@@ -13,13 +13,15 @@ import (
 
 // AIHandler AI相关的处理器
 type AIHandler struct {
-	aiService *services.AIService
+	aiService   *services.AIService
+	newsService *services.NewsService
 }
 
 // NewAIHandler 创建AI处理器实例
-func NewAIHandler() *AIHandler {
+func NewAIHandler(newsService *services.NewsService) *AIHandler {
 	return &AIHandler{
-		aiService: services.NewAIService(database.GetDB()),
+		aiService:   services.NewAIService(database.GetDB()),
+		newsService: newsService,
 	}
 }
 
@@ -250,4 +252,46 @@ func (h *AIHandler) GetAnalysisStats(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, "获取统计信息成功", stats)
+}
+
+// SummarizeNews godoc
+// @Summary      Summarize a news article
+// @Description  get a summary for a news article by its ID
+// @Tags         AI
+// @Accept       json
+// @Produce      json
+// @Param        id   path      int  true  "News ID"
+// @Success      200  {object}  map[string]string
+// @Failure      400  {object}  utils.ErrorResponse
+// @Failure      404  {object}  utils.ErrorResponse
+// @Failure      500  {object}  utils.ErrorResponse
+// @Router       /news/{id}/summarize [post]
+func (h *AIHandler) SummarizeNews(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Invalid news ID", err.Error())
+		return
+	}
+
+	news, err := h.newsService.GetNewsByID(c.Request.Context(), uint(id))
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "News not found", err.Error())
+		return
+	}
+
+	// 使用AI服务进行总结
+	analysis, err := h.aiService.AnalyzeNews(news.ID, models.AIAnalysisRequest{
+		Type:     models.AIAnalysisTypeNews,
+		TargetID: news.ID,
+		Options: models.AIAnalysisOptions{
+			EnableSummary: true,
+		},
+	})
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Failed to generate summary", err.Error())
+		return
+	}
+
+	utils.SuccessResponse(c, "总结生成成功", gin.H{"summary": analysis.Summary})
 }

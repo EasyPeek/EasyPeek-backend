@@ -48,3 +48,9 @@ ai:
     max_batch_size: 10 # 每次批处理的最大新闻数量
     analysis_delay: 2 # 每个分析之间的延迟（秒）
 
+# OpenRouter配置（备用配置，与ai配置保持一致）
+open_router:
+  api_key: "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"
+  api_host: "https://openrouter.ai/api/v1"
+  model: "google/gemini-2.0-flash-exp:free"
+

@@ -315,6 +315,47 @@ func (h *NewsHandler) GetNewsByCategory(c *gin.Context) {
 	utils.Success(c, newsResponses)
 }
 
+// GetNewsByEventID 根据事件ID获取相关新闻
+func (h *NewsHandler) GetNewsByEventID(c *gin.Context) {
+	// 从URL参数中获取事件ID
+	eventIDStr := c.Param("eventId")
+	eventID, err := strconv.Atoi(eventIDStr)
+	if err != nil {
+		utils.BadRequest(c, "Invalid event ID")
+		return
+	}
+
+	// 获取查询参数中的页码和每页大小，并设置默认值
+	pageStr := c.DefaultQuery("page", "1")
+	sizeStr := c.DefaultQuery("size", "10")
+
+	// 转换页码和每页大小为整数，并处理无效值
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		page = 1
+	}
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil || size < 1 || size > 100 { // 限制每页最大大小
+		size = 10
+	}
+
+	// 调用NewsService的GetNewsByEventID方法获取事件相关新闻
+	newsList, total, err := h.newsService.GetNewsByEventID(uint(eventID), page, size)
+	if err != nil {
+		utils.InternalServerError(c, err.Error())
+		return
+	}
+
+	// 将新闻列表转换为响应格式
+	var newsResponses []models.NewsResponse
+	for _, news := range newsList {
+		newsResponses = append(newsResponses, news.ToResponse())
+	}
+
+	// 返回带分页信息的响应
+	utils.SuccessWithPagination(c, newsResponses, total, page, size)
+}
+
 // SmartSearchNews 智能搜索新闻
 func (h *NewsHandler) SmartSearchNews(c *gin.Context) {
 	// 获取查询参数中的搜索关键词

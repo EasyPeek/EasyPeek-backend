@@ -33,15 +33,16 @@ func (s *NewsService) CreateNews(req *models.NewsCreateRequest, createdByUserID 
 
 	// 构造 News 模型实例
 	news := &models.News{
-		Title:       req.Title,
-		Content:     req.Content,
-		Summary:     req.Summary,
-		Source:      req.Source,
-		Category:    req.Category,
-		PublishedAt: time.Now(),            // 默认设置为当前时间，如果请求中没有提供
-		CreatedBy:   &createdByUserID,      // 设置创建者ID指针
-		IsActive:    true,                  // 默认新闻是活跃的/可见的
-		SourceType:  models.NewsTypeManual, // 手动创建的新闻
+		Title:           req.Title,
+		Content:         req.Content,
+		Summary:         req.Summary,
+		Source:          req.Source,
+		Category:        req.Category,
+		PublishedAt:     time.Now(),            // 默认设置为当前时间，如果请求中没有提供
+		CreatedBy:       &createdByUserID,      // 设置创建者ID指针
+		IsActive:        true,                  // 默认新闻是活跃的/可见的
+		SourceType:      models.NewsTypeManual, // 手动创建的新闻
+		BelongedEventID: req.BelongedEventID,   // 设置关联的事件ID
 	}
 
 	// 如果请求中提供了 PublishedAt，则使用请求的值
@@ -122,6 +123,9 @@ func (s *NewsService) UpdateNews(news *models.News, req *models.NewsUpdateReques
 	}
 	if req.IsActive != nil {
 		news.IsActive = *req.IsActive
+	}
+	if req.BelongedEventID != nil {
+		news.BelongedEventID = req.BelongedEventID
 	}
 
 	// 使用 Save 方法保存更新，GORM 会根据主键自动判断是插入还是更新
@@ -246,19 +250,48 @@ func (s *NewsService) UpdateNewsEventAssociation(newsIDs []uint, eventID uint) e
 	return nil
 }
 
-// GetNewsByEventID 根据事件ID获取关联的新闻列表
-func (s *NewsService) GetNewsByEventID(eventID uint) ([]models.News, error) {
+// GetNewsByEventID 根据事件ID获取相关新闻列表（带分页，兼容不分页调用）
+func (s *NewsService) GetNewsByEventID(eventID uint, args ...int) ([]models.News, int64, error) {
 	// 检查数据库连接是否已初始化
 	if s.db == nil {
-		return nil, errors.New("database connection not initialized")
+		return nil, 0, errors.New("database connection not initialized")
 	}
 
 	var newsList []models.News
-	if err := s.db.Where("belonged_event_id = ?", eventID).Find(&newsList).Error; err != nil {
-		return nil, fmt.Errorf("获取事件关联新闻失败: %w", err)
+	var total int64
+
+	// 构建查询
+	dbQuery := s.db.Model(&models.News{}).Where("belonged_event_id = ?", eventID)
+
+	// 计算符合条件的记录总数
+	if err := dbQuery.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count news for event %d: %w", eventID, err)
 	}
 
-	return newsList, nil
+	// 如果提供了分页参数
+	if len(args) >= 2 {
+		page, pageSize := args[0], args[1]
+		// 计算分页偏移量
+		offset := (page - 1) * pageSize
+		if offset < 0 {
+			offset = 0
+		}
+		if pageSize <= 0 {
+			pageSize = 10
+		}
+
+		// 执行带分页的查询，按发布时间降序排序（最新的优先）
+		if err := dbQuery.Order("published_at DESC").Offset(offset).Limit(pageSize).Find(&newsList).Error; err != nil {
+			return nil, 0, fmt.Errorf("failed to get news for event %d: %w", eventID, err)
+		}
+	} else {
+		// 不分页，获取所有相关新闻
+		if err := dbQuery.Order("published_at DESC").Find(&newsList).Error; err != nil {
+			return nil, 0, fmt.Errorf("failed to get news for event %d: %w", eventID, err)
+		}
+	}
+
+	return newsList, total, nil
 }
 
 // UpdateNewsEventAssociationByIDs 根据新闻ID列表更新关联事件（支持取消关联）
@@ -481,10 +514,12 @@ func (s *NewsService) SmartSearchNews(query string, page, pageSize int) ([]model
 
 	// 添加基础搜索结果
 	var baseResults []models.News
-	if err := baseQuery.Find(&baseResults).Error; err == nil {
-		for _, news := range baseResults {
-			newsMap[news.ID] = news
-		}
+	if err := baseQuery.Find(&baseResults).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to search news: %w", err)
+	}
+
+	for _, news := range baseResults {
+		newsMap[news.ID] = news
 	}
 
 	// 添加AI搜索结果
@@ -504,7 +539,7 @@ func (s *NewsService) SmartSearchNews(query string, page, pageSize int) ([]model
 
 	total = int64(len(combinedResults))
 
-	// 分页处理
+	// 分页
 	offset := (page - 1) * pageSize
 	if offset < 0 {
 		offset = 0
@@ -514,56 +549,83 @@ func (s *NewsService) SmartSearchNews(query string, page, pageSize int) ([]model
 	}
 
 	end := offset + pageSize
-	if end > len(combinedResults) {
-		end = len(combinedResults)
+	if end > int(total) {
+		end = int(total)
 	}
 
-	if offset >= len(combinedResults) {
+	if offset >= int(total) {
 		return []models.News{}, total, nil
 	}
 
 	newsList = combinedResults[offset:end]
-
 	return newsList, total, nil
 }
 
-// GetHotKeywords 获取热门关键词（基于AI分析结果）
+// GetHotKeywords 获取热门关键词，基于AI分析结果动态生成
 func (s *NewsService) GetHotKeywords(limit int) ([]string, error) {
+	// 检查数据库连接是否已初始化
 	if s.db == nil {
 		return nil, errors.New("database connection not initialized")
 	}
 
+	// 设置默认限制
 	if limit <= 0 || limit > 50 {
-		limit = 10
+		limit = 20
 	}
 
-	// 查询最近的AI分析结果
-	var analyses []models.AIAnalysis
-	if err := s.db.Where("keywords IS NOT NULL AND keywords != ''").
-		Order("created_at DESC").
-		Limit(100).
-		Find(&analyses).Error; err != nil {
-		return nil, fmt.Errorf("failed to get AI analyses: %w", err)
+	// 查询最近7天的AI分析结果
+	var analysisResults []struct {
+		Keywords string `json:"keywords"`
 	}
 
-	// 统计关键词频次
+	query := `
+		SELECT keywords 
+		FROM ai_analyses 
+		WHERE status = 'completed' 
+			AND keywords IS NOT NULL 
+			AND keywords != '' 
+			AND created_at >= NOW() - INTERVAL '7 days'
+		ORDER BY created_at DESC
+		LIMIT 1000
+	`
+
+	if err := s.db.Raw(query).Scan(&analysisResults).Error; err != nil {
+		return nil, fmt.Errorf("failed to get AI analysis results: %w", err)
+	}
+
+	// 统计关键词频率
 	keywordCount := make(map[string]int)
-	for _, analysis := range analyses {
-		if analysis.Keywords == "" {
+
+	for _, result := range analysisResults {
+		if result.Keywords == "" {
 			continue
 		}
 
-		// 解析关键词（假设格式为逗号分隔）
-		keywords := strings.Split(analysis.Keywords, ",")
+		// 解析关键词字符串
+		var keywords []string
+		if strings.Contains(result.Keywords, ",") {
+			// 处理逗号分隔的关键词
+			keywords = strings.Split(result.Keywords, ",")
+		} else if strings.Contains(result.Keywords, "、") {
+			// 处理中文顿号分隔的关键词
+			keywords = strings.Split(result.Keywords, "、")
+		} else if strings.Contains(result.Keywords, ";") {
+			// 处理分号分隔的关键词
+			keywords = strings.Split(result.Keywords, ";")
+		} else {
+			// 单个关键词
+			keywords = []string{result.Keywords}
+		}
+
 		for _, keyword := range keywords {
 			keyword = strings.TrimSpace(keyword)
-			if len(keyword) > 1 && len(keyword) < 20 { // 过滤太短或太长的关键词
+			if keyword != "" && len(keyword) > 1 {
 				keywordCount[keyword]++
 			}
 		}
 	}
 
-	// 按频次排序
+	// 排序关键词
 	type keywordFreq struct {
 		keyword string
 		count   int
@@ -571,18 +633,21 @@ func (s *NewsService) GetHotKeywords(limit int) ([]string, error) {
 
 	var sortedKeywords []keywordFreq
 	for keyword, count := range keywordCount {
-		sortedKeywords = append(sortedKeywords, keywordFreq{keyword, count})
+		sortedKeywords = append(sortedKeywords, keywordFreq{keyword: keyword, count: count})
 	}
 
 	sort.Slice(sortedKeywords, func(i, j int) bool {
 		return sortedKeywords[i].count > sortedKeywords[j].count
 	})
 
-	// 返回前N个关键词
-	var result []string
-	for i := 0; i < len(sortedKeywords) && i < limit; i++ {
-		result = append(result, sortedKeywords[i].keyword)
+	// 返回前N个热门关键词
+	var hotKeywords []string
+	for i, kf := range sortedKeywords {
+		if i >= limit {
+			break
+		}
+		hotKeywords = append(hotKeywords, kf.keyword)
 	}
 
-	return result, nil
+	return hotKeywords, nil
 }
