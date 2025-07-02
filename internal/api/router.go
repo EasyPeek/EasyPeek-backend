@@ -68,12 +68,12 @@ func SetupRoutes() *gin.Engine {
 		follows := v1.Group("/follows")
 		follows.Use(middleware.AuthMiddleware())
 		{
-			follows.POST("", followHandler.AddFollow)                  // 添加关注
-			follows.DELETE("", followHandler.RemoveFollow)             // 取消关注
-			follows.GET("", followHandler.GetFollows)                  // 获取关注列表
-			follows.GET("/check", followHandler.CheckFollow)           // 检查是否已关注
-			follows.GET("/stats", followHandler.GetFollowStats)        // 获取关注统计
-			follows.GET("/events", followHandler.GetAvailableEvents)   // 获取可关注的事件列表
+			follows.POST("", followHandler.AddFollow)        // 添加关注
+			follows.DELETE("", followHandler.RemoveFollow)   // 取消关注
+			follows.GET("", followHandler.GetFollows)        // 获取关注列表（包含统计信息）
+			follows.GET("/check", followHandler.CheckFollow) // 检查是否已关注
+			// follows.GET("/stats", followHandler.GetFollowStats)   // 已废弃：获取关注统计，请使用 GET /follows
+			follows.GET("/events", followHandler.GetAvailableEvents) // 获取可关注的事件列表
 		}
 
 		// news routes

@@ -100,6 +100,36 @@ func (s *FollowService) GetUserFollows(userID uint) ([]models.FollowResponse, er
 	return responses, nil
 }
 
+// GetUserFollowsWithPagination 获取用户关注的事件列表（支持分页）
+func (s *FollowService) GetUserFollowsWithPagination(userID uint, page, pageSize int) ([]models.FollowResponse, int64, error) {
+	if s.db == nil {
+		return nil, 0, errors.New("database connection not initialized")
+	}
+
+	// 获取总数
+	var total int64
+	if err := s.db.Model(&models.Follow{}).Where("user_id = ?", userID).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// 计算偏移量
+	offset := (page - 1) * pageSize
+
+	var follows []models.Follow
+	// 构建查询，预加载事件信息，支持分页
+	if err := s.db.Preload("Event").Where("user_id = ?", userID).Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&follows).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// 转换为响应格式
+	var responses []models.FollowResponse
+	for _, follow := range follows {
+		responses = append(responses, follow.ToResponse())
+	}
+
+	return responses, total, nil
+}
+
 // CheckFollow 检查是否已关注事件
 func (s *FollowService) CheckFollow(userID uint, eventID uint) (bool, error) {
 	if s.db == nil {

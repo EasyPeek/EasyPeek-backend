@@ -20,9 +20,9 @@ func NewMessageHandler() *MessageHandler {
 	}
 }
 
-// GetMessages 获取用户消息列表
-// @Summary 获取用户消息列表
-// @Description 获取当前用户的消息列表，支持分页和类型筛选
+// GetMessages 获取用户消息列表（包含未读数量）
+// @Summary 获取用户消息列表和未读数量
+// @Description 获取当前用户的消息列表，支持分页和类型筛选，同时返回未读消息数量
 // @Tags messages
 // @Accept json
 // @Produce json
@@ -62,21 +62,26 @@ func (h *MessageHandler) GetMessages(c *gin.Context) {
 		return
 	}
 
+	// 获取未读消息数量
+	unreadCount, err := h.messageService.GetUnreadCount(userID.(uint))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"messages":    messages,
-			"total":       total,
-			"page":        page,
-			"page_size":   pageSize,
-			"total_pages": (total + int64(pageSize) - 1) / int64(pageSize),
-		},
+		"messages":     messages,
+		"total":        total,
+		"unread_count": unreadCount,
+		"page":         page,
+		"page_size":    pageSize,
+		"total_pages":  (total + int64(pageSize) - 1) / int64(pageSize),
 	})
 }
 
-// GetUnreadCount 获取未读消息数量
-// @Summary 获取未读消息数量
-// @Description 获取当前用户的未读消息数量
+// GetUnreadCount 获取未读消息数量（已废弃，请使用 GetMessages 接口）
+// @Summary 获取未读消息数量（已废弃）
+// @Description 此接口已废弃，请使用 GET /api/v1/messages 接口获取消息列表和未读数量
 // @Tags messages
 // @Accept json
 // @Produce json
@@ -84,6 +89,7 @@ func (h *MessageHandler) GetMessages(c *gin.Context) {
 // @Failure 401 {object} map[string]interface{} "unauthorized"
 // @Failure 500 {object} map[string]interface{} "internal server error"
 // @Router /api/v1/messages/unread-count [get]
+// @deprecated
 func (h *MessageHandler) GetUnreadCount(c *gin.Context) {
 	// 从JWT中获取用户ID
 	userID, exists := c.Get("user_id")
@@ -100,7 +106,6 @@ func (h *MessageHandler) GetUnreadCount(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
 		"data": gin.H{
 			"unread_count": count,
 		},
