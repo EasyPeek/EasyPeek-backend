@@ -111,16 +111,13 @@ func (s *SeedService) SeedNewsFromJSON(jsonFilePath string) error {
 		return fmt.Errorf("database connection not initialized")
 	}
 
-	// 检查是否已经有新闻数据，避免重复导入
+	// 检查现有新闻数据数量
 	var count int64
 	if err := s.db.Model(&models.News{}).Count(&count).Error; err != nil {
 		return fmt.Errorf("failed to check existing news count: %w", err)
 	}
 
-	if count > 0 {
-		log.Printf("数据库中已存在 %d 条新闻记录，跳过数据导入", count)
-		return nil
-	}
+	log.Printf("数据库中当前有 %d 条新闻记录，准备进行增量导入", count)
 
 	// 读取JSON文件
 	jsonData, err := os.ReadFile(jsonFilePath)
