@@ -329,7 +329,7 @@ func (s *NewsService) GetHotNews(limit int) ([]models.News, error) {
 	}
 
 	var newsList []models.News
-	
+
 	// 设置默认限制
 	if limit <= 0 || limit > 100 {
 		limit = 10
@@ -355,7 +355,7 @@ func (s *NewsService) GetLatestNews(limit int) ([]models.News, error) {
 	}
 
 	var newsList []models.News
-	
+
 	// 设置默认限制
 	if limit <= 0 || limit > 100 {
 		limit = 10
@@ -367,6 +367,57 @@ func (s *NewsService) GetLatestNews(limit int) ([]models.News, error) {
 		Limit(limit).
 		Find(&newsList).Error; err != nil {
 		return nil, fmt.Errorf("failed to get latest news: %w", err)
+	}
+
+	return newsList, nil
+}
+
+// GetNewsByCategoryHot 按分类获取热门新闻
+func (s *NewsService) GetNewsByCategoryHot(category string, limit int) ([]models.News, error) {
+	// 检查数据库连接是否已初始化
+	if s.db == nil {
+		return nil, errors.New("database connection not initialized")
+	}
+
+	var newsList []models.News
+
+	// 设置默认限制
+	if limit <= 0 || limit > 100 {
+		limit = 10
+	}
+
+	// 查询指定分类的热门新闻，按热度相关字段排序
+	// 这里暂时按照创建时间排序，实际项目中可以根据浏览量、点赞数等字段排序
+	if err := s.db.Where("is_active = ? AND category = ?", true, category).
+		Order("created_at desc").
+		Limit(limit).
+		Find(&newsList).Error; err != nil {
+		return nil, fmt.Errorf("failed to get hot news by category: %w", err)
+	}
+
+	return newsList, nil
+}
+
+// GetNewsByCategoryLatest 按分类获取最新新闻
+func (s *NewsService) GetNewsByCategoryLatest(category string, limit int) ([]models.News, error) {
+	// 检查数据库连接是否已初始化
+	if s.db == nil {
+		return nil, errors.New("database connection not initialized")
+	}
+
+	var newsList []models.News
+
+	// 设置默认限制
+	if limit <= 0 || limit > 100 {
+		limit = 10
+	}
+
+	// 查询指定分类的最新新闻，按发布时间倒序排列
+	if err := s.db.Where("is_active = ? AND category = ?", true, category).
+		Order("published_at desc").
+		Limit(limit).
+		Find(&newsList).Error; err != nil {
+		return nil, fmt.Errorf("failed to get latest news by category: %w", err)
 	}
 
 	return newsList, nil
