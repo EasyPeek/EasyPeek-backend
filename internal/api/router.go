@@ -83,7 +83,6 @@ func SetupRoutes() *gin.Engine {
 			authComments.Use(middleware.AuthMiddleware())
 			{
 				authComments.POST("", commentHandler.CreateComment)       // 创建评论
-				authComments.PUT("/:id", commentHandler.UpdateComment)    // 更新评论
 				authComments.DELETE("/:id", commentHandler.DeleteComment) // 删除评论
 			}
 		}

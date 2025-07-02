@@ -13,8 +13,7 @@ type Comment struct {
 	UserID    uint           `json:"user_id" gorm:"not null;index"`     // 发表评论的用户ID
 	Content   string         `json:"content" gorm:"type:text;not null"` // 评论的内容
 	CreatedAt time.Time      `json:"created_at"`                        // 评论的时间
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"` // 软删除
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`                    // 软删除
 
 	// GORM 关系定义
 	News *News `json:"news,omitempty" gorm:"foreignKey:NewsID;references:ID"`
@@ -28,18 +27,12 @@ type CommentResponse struct {
 	UserID    uint          `json:"user_id"`
 	Content   string        `json:"content"`
 	CreatedAt time.Time     `json:"created_at"`
-	UpdatedAt time.Time     `json:"updated_at"`
 	User      *UserResponse `json:"user,omitempty"`
 }
 
 // CommentCreateRequest 用于创建评论时的请求体
 type CommentCreateRequest struct {
 	NewsID  uint   `json:"news_id" binding:"required"`                // 新闻ID必填
-	Content string `json:"content" binding:"required,min=1,max=1000"` // 评论内容必填，限制长度
-}
-
-// CommentUpdateRequest 用于更新评论时的请求体
-type CommentUpdateRequest struct {
 	Content string `json:"content" binding:"required,min=1,max=1000"` // 评论内容必填，限制长度
 }
 
@@ -55,7 +48,6 @@ func (c *Comment) ToResponse() CommentResponse {
 		UserID:    c.UserID,
 		Content:   c.Content,
 		CreatedAt: c.CreatedAt,
-		UpdatedAt: c.UpdatedAt,
 	}
 
 	// 如果有用户关联，添加用户信息

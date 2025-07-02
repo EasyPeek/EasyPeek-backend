@@ -168,52 +168,6 @@ func (h *CommentHandler) GetCommentsByUserID(c *gin.Context) {
 	utils.SuccessWithPagination(c, commentResponses, total, page, size)
 }
 
-// UpdateComment 更新评论
-func (h *CommentHandler) UpdateComment(c *gin.Context) {
-	// 从 URL 参数中获取评论ID
-	idStr := c.Param("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		utils.BadRequest(c, "Invalid comment ID")
-		return
-	}
-
-	var req models.CommentUpdateRequest
-	// 将请求的 JSON 主体绑定到 CommentUpdateRequest 结构体
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "Invalid request data: "+err.Error())
-		return
-	}
-
-	// 从 Gin 上下文中获取用户ID
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.Unauthorized(c, "User not authenticated")
-		return
-	}
-	// 将 userID 转换为 uint 类型
-	updaterID, ok := userID.(uint)
-	if !ok {
-		utils.InternalServerError(c, "Failed to get user ID from context")
-		return
-	}
-
-	// 调用 CommentService 的 UpdateComment 方法进行更新
-	if err := h.commentService.UpdateComment(uint(id), updaterID, &req); err != nil {
-		if err.Error() == "comment not found" {
-			utils.NotFound(c, err.Error())
-		} else if err.Error() == "permission denied: only comment author can update" {
-			utils.Forbidden(c, err.Error())
-		} else {
-			utils.InternalServerError(c, err.Error())
-		}
-		return
-	}
-
-	// 成功更新，返回成功消息
-	utils.Success(c, gin.H{"message": "Comment updated successfully"})
-}
-
 // DeleteComment 删除评论
 func (h *CommentHandler) DeleteComment(c *gin.Context) {
 	// 从 URL 参数中获取评论ID

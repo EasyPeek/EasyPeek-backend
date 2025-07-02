@@ -159,39 +159,6 @@ func (s *CommentService) GetCommentsByUserID(userID uint, page, pageSize int) ([
 	return comments, total, nil
 }
 
-// UpdateComment 更新评论内容
-func (s *CommentService) UpdateComment(commentID uint, userID uint, req *models.CommentUpdateRequest) error {
-	// 检查数据库连接是否已初始化
-	if s.db == nil {
-		return errors.New("database connection not initialized")
-	}
-
-	// 先获取评论记录
-	var comment models.Comment
-	if err := s.db.First(&comment, commentID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("comment not found")
-		}
-		return fmt.Errorf("failed to get comment: %w", err)
-	}
-
-	// 检查权限：只有评论的作者才能更新评论
-	if comment.UserID != userID {
-		return errors.New("permission denied: only comment author can update")
-	}
-
-	// 更新评论内容
-	comment.Content = req.Content
-	comment.UpdatedAt = time.Now()
-
-	// 保存更新
-	if err := s.db.Save(&comment).Error; err != nil {
-		return fmt.Errorf("failed to update comment: %w", err)
-	}
-
-	return nil
-}
-
 // DeleteComment 删除评论（软删除）
 func (s *CommentService) DeleteComment(commentID uint, userID uint) error {
 	// 检查数据库连接是否已初始化
