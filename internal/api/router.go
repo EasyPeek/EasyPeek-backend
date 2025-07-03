@@ -204,12 +204,22 @@ func SetupRoutes() *gin.Engine {
 				users.GET("/active", userHandler.GetActiveUsers) // 获取活跃用户（保持兼容）
 				users.GET("/:id", adminHandler.GetUserByID)      // 获取指定用户
 
-				
-				users.PUT("/:id", adminHandler.UpdateUser)       // 更新用户信息
-				users.DELETE("/:id", adminHandler.DeleteUser)    // 管理员删除用户（硬删除）
+				users.PUT("/:id", adminHandler.UpdateUser)    // 更新用户信息
+				users.DELETE("/:id", adminHandler.DeleteUser) // 管理员删除用户（硬删除）
 				// 保留原有的单独角色和状态更新接口
 				// users.PUT("/:id/role", userHandler.UpdateUserRole)     // 更新用户角色
 				// users.PUT("/:id/status", userHandler.UpdateUserStatus) // 更新用户状态
+			}
+
+			// RSS Management
+			rss := admin.Group("/rss")
+			{
+				rss.GET("", rssHandler.GetRSSSources)               // 获取所有RSS源
+				rss.POST("", rssHandler.CreateRSSSource)            // 创建RSS源
+				rss.PUT("/:id", rssHandler.UpdateRSSSource)         // 更新RSS源
+				rss.DELETE("/:id", rssHandler.DeleteRSSSource)      // 删除RSS源
+				rss.POST("/:id/fetch", rssHandler.FetchRSSFeed)     // 手动抓取RSS源
+				rss.POST("/fetch-all", rssHandler.FetchAllRSSFeeds) // 抓取所有RSS源
 			}
 
 			// 事件管理
@@ -233,17 +243,6 @@ func SetupRoutes() *gin.Engine {
 			{
 				comments.GET("", commentHandler.GetAllComments)            // 获取所有评论
 				comments.DELETE("/:id", commentHandler.AdminDeleteComment) // 管理员删除评论（硬删除）
-			}
-
-			// RSS源管理
-			rssAdmin := admin.Group("/rss-sources")
-			{
-				rssAdmin.GET("", adminHandler.GetAllRSSSources)            // 获取所有RSS源
-				rssAdmin.POST("", adminHandler.CreateRSSSource)            // 创建RSS源
-				rssAdmin.PUT("/:id", adminHandler.UpdateRSSSource)         // 更新RSS源
-				rssAdmin.DELETE("/:id", adminHandler.DeleteRSSSource)      // 删除RSS源
-				rssAdmin.POST("/:id/fetch", adminHandler.FetchRSSFeed)     // 手动抓取RSS源
-				rssAdmin.POST("/fetch-all", adminHandler.FetchAllRSSFeeds) // 抓取所有RSS源
 			}
 
 			// 消息管理
