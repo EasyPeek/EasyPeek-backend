@@ -9,7 +9,7 @@ import (
 // Follow 关注模型 - 用户关注事件
 type Follow struct {
 	ID        uint           `json:"id" gorm:"primaryKey"`
-	UserID    uint           `json:"user_id" gorm:"not null;index"` // 关注者ID
+	UserID    uint           `json:"user_id" gorm:"not null;index"`  // 关注者ID
 	EventID   uint           `json:"event_id" gorm:"not null;index"` // 关注的事件ID
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
@@ -22,10 +22,10 @@ type Follow struct {
 
 // FollowResponse 关注响应结构
 type FollowResponse struct {
-	ID        uint      `json:"id"`
-	EventID   uint      `json:"event_id"`
-	EventTitle string   `json:"event_title"` // 事件标题
-	CreatedAt time.Time `json:"created_at"`
+	ID         uint      `json:"id"`
+	EventID    uint      `json:"event_id"`
+	EventTitle string    `json:"event_title"` // 事件标题
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // FollowStats 关注统计
@@ -46,7 +46,7 @@ type RemoveFollowRequest struct {
 
 // CheckFollowRequest 检查关注请求
 type CheckFollowRequest struct {
-	EventID uint `json:"event_id" binding:"required"` // 要检查的事件ID
+	EventID uint `form:"event_id" binding:"required"` // 修改为form标签以支持查询参数绑定
 }
 
 // ToResponse 转换为响应格式
@@ -58,8 +58,6 @@ func (f *Follow) ToResponse() FollowResponse {
 		CreatedAt:  f.CreatedAt,
 	}
 }
-
-
 
 // TableName 设置表名
 func (Follow) TableName() string {

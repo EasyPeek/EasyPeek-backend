@@ -283,3 +283,123 @@ func (h *MessageHandler) CreateMessage(c *gin.Context) {
 		"message": "Message created successfully",
 	})
 }
+
+// GetFollowedEventsLatestNews 获取用户关注事件的最新新闻
+// @Summary 获取用户关注事件的最新新闻
+// @Description 获取当前用户关注的所有事件的最新一篇新闻
+// @Tags messages
+// @Accept json
+// @Produce json
+// @Param limit query int false "限制返回数量" default(20)
+// @Success 200 {object} map[string]interface{} "success"
+// @Failure 401 {object} map[string]interface{} "unauthorized"
+// @Failure 500 {object} map[string]interface{} "internal server error"
+// @Router /api/v1/messages/followed-events-news [get]
+func (h *MessageHandler) GetFollowedEventsLatestNews(c *gin.Context) {
+	// 从JWT中获取用户ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "User not authenticated",
+			"data":    nil,
+		})
+		return
+	}
+
+	// 获取查询参数
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+
+	// 参数验证
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
+	// 获取关注事件的最新新闻
+	result, err := h.messageService.GetFollowedEventsLatestNews(userID.(uint), limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": err.Error(),
+			"data":    nil,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "success",
+		"data":    result,
+	})
+}
+
+// GetFollowedEventsRecentNews 获取用户关注事件的最近新闻
+// @Summary 获取用户关注事件的最近新闻
+// @Description 获取用户关注事件在指定时间范围内的最新新闻，用于个人中心通知显示
+// @Tags messages
+// @Accept json
+// @Produce json
+// @Param hours query int false "获取几小时内的新闻" default(24)
+// @Param create_notifications query bool false "是否为新闻创建通知消息" default(false)
+// @Success 200 {object} map[string]interface{} "success"
+// @Failure 401 {object} map[string]interface{} "unauthorized"
+// @Failure 500 {object} map[string]interface{} "internal server error"
+// @Router /api/v1/messages/followed-events-recent-news [get]
+func (h *MessageHandler) GetFollowedEventsRecentNews(c *gin.Context) {
+	// 从JWT中获取用户ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "User not authenticated",
+			"data":    nil,
+		})
+		return
+	}
+
+	// 获取查询参数
+	hours, _ := strconv.Atoi(c.DefaultQuery("hours", "24"))
+	createNotifications := c.DefaultQuery("create_notifications", "false") == "true"
+
+	// 参数验证
+	if hours < 1 {
+		hours = 24
+	}
+	if hours > 168 { // 最多7天
+		hours = 168
+	}
+
+	// 获取关注事件的最近新闻
+	recentNews, err := h.messageService.GetFollowedEventsRecentNews(userID.(uint), hours)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": err.Error(),
+			"data":    nil,
+		})
+		return
+	}
+
+	// 如果需要，创建通知消息
+	if createNotifications && len(recentNews) > 0 {
+		err = h.messageService.CreateNewsUpdateNotifications(userID.(uint), hours)
+		if err != nil {
+			// 创建通知失败不影响数据返回，只记录日志
+			c.Header("X-Notification-Warning", "Failed to create notifications: "+err.Error())
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "success",
+		"data": gin.H{
+			"recent_news":           recentNews,
+			"count":                 len(recentNews),
+			"hours_range":           hours,
+			"notifications_created": createNotifications,
+		},
+	})
+}

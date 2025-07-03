@@ -58,11 +58,13 @@ func SetupRoutes() *gin.Engine {
 		messages := v1.Group("/messages")
 		messages.Use(middleware.AuthMiddleware())
 		{
-			messages.GET("", messageHandler.GetMessages)                 // 获取消息列表
-			messages.GET("/unread-count", messageHandler.GetUnreadCount) // 获取未读消息数量
-			messages.PUT("/:id/read", messageHandler.MarkAsRead)         // 标记消息已读
-			messages.PUT("/read-all", messageHandler.MarkAllAsRead)      // 标记全部已读
-			messages.DELETE("/:id", messageHandler.DeleteMessage)        // 删除消息
+			messages.GET("", messageHandler.GetMessages)                                             // 获取消息列表
+			messages.GET("/unread-count", messageHandler.GetUnreadCount)                             // 获取未读消息数量
+			messages.GET("/followed-events-news", messageHandler.GetFollowedEventsLatestNews)        // 获取关注事件的最新新闻
+			messages.GET("/followed-events-recent-news", messageHandler.GetFollowedEventsRecentNews) // 获取关注事件的最近新闻
+			messages.PUT("/:id/read", messageHandler.MarkAsRead)                                     // 标记消息已读
+			messages.PUT("/read-all", messageHandler.MarkAllAsRead)                                  // 标记全部已读
+			messages.DELETE("/:id", messageHandler.DeleteMessage)                                    // 删除消息
 		}
 
 		// follow routes

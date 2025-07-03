@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/EasyPeek/EasyPeek-backend/internal/database"
 	"github.com/EasyPeek/EasyPeek-backend/internal/models"
@@ -59,7 +60,28 @@ func (s *FollowService) AddFollow(userID uint, eventID uint) error {
 		EventID: eventID,
 	}
 
-	return s.db.Create(follow).Error
+	err = s.db.Create(follow).Error
+	if err != nil {
+		return err
+	}
+
+	// 创建关注成功的消息通知
+	messageService := NewMessageService()
+	title := "关注事件成功"
+	content := fmt.Sprintf("您已成功关注事件「%s」，我们将为您推送相关的最新动态。", event.Title)
+
+	// 创建关注消息（忽略错误，不影响关注操作）
+	_ = messageService.CreateMessage(
+		userID,
+		"follow",
+		title,
+		content,
+		"event",
+		eventID,
+		nil, // 系统消息
+	)
+
+	return nil
 }
 
 // RemoveFollow 取消关注事件
