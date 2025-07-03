@@ -191,10 +191,7 @@ func SetupRoutes() *gin.Engine {
 		admin.Use(middleware.AuthMiddleware())
 		admin.Use(middleware.AdminAuthMiddleware())
 		{
-			// admin login
-			// admin.POST("/login", adminHandler.AdminLogin)
-
-			// 系统统计
+			// system stats
 			admin.GET("/stats", adminHandler.GetSystemStats)
 
 			// 用户管理
