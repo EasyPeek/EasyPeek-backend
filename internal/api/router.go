@@ -1,7 +1,7 @@
 package api
 
 import (
-	"github.com/EasyPeek/EasyPeek-backend/internal/models/middleware"
+	"github.com/EasyPeek/EasyPeek-backend/internal/middleware"
 	"github.com/gin-gonic/gin"
 )
 
