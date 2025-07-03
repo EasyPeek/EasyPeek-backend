@@ -27,7 +27,6 @@ func NewAdminHandler() *AdminHandler {
 	}
 }
 
-// 
 func (h *AdminHandler) AdminLogin(c *gin.Context) {
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -49,9 +48,7 @@ func (h *AdminHandler) AdminLogin(c *gin.Context) {
 	utils.Success(c, response)
 }
 
-// ===== 系统统计 =====
-
-// GetSystemStats 获取系统统计信息
+// GetSystemStats
 func (h *AdminHandler) GetSystemStats(c *gin.Context) {
 	stats, err := h.adminService.GetSystemStats()
 	if err != nil {
@@ -62,9 +59,8 @@ func (h *AdminHandler) GetSystemStats(c *gin.Context) {
 	utils.Success(c, stats)
 }
 
-// ===== 用户管理 =====
-
-// GetAllUsers 获取所有用户列表（带过滤）
+// user
+// GetAllUsers
 func (h *AdminHandler) GetAllUsers(c *gin.Context) {
 	pageStr := c.DefaultQuery("page", "1")
 	sizeStr := c.DefaultQuery("size", "10")

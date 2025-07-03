@@ -49,8 +49,6 @@ func (s *AdminService) AdminLogin(req *models.LoginRequest) (*models.User, strin
 	return &user, token, nil
 }
 
-
-
 // ===== 用户管理相关 =====
 
 // GetAllUsers 获取所有用户（包括已删除的）
@@ -181,7 +179,7 @@ func (s *AdminService) DeleteUser(userID uint) error {
 	return nil
 }
 
-// GetSystemStats 获取系统统计信息
+// GetSystemStats
 func (s *AdminService) GetSystemStats() (*SystemStats, error) {
 	if s.db == nil {
 		return nil, errors.New("database connection not initialized")
