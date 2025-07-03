@@ -106,6 +106,7 @@ func SetupRoutes() *gin.Engine {
 			comments.GET("/:id", commentHandler.GetCommentByID)                // 根据ID获取单条评论
 			comments.GET("/news/:news_id", commentHandler.GetCommentsByNewsID) // 根据新闻ID获取评论列表
 			comments.GET("/user/:user_id", commentHandler.GetCommentsByUserID) // 根据用户ID获取评论列表
+			comments.POST("/anonymous", commentHandler.CreateAnonymousComment) // 创建匿名评论
 
 			// 需要身份验证的路由
 			authComments := comments.Group("")
