@@ -1,7 +1,6 @@
 package api
 
 import (
-	"net/http"
 	"strconv"
 
 	"github.com/EasyPeek/EasyPeek-backend/internal/database"
@@ -37,7 +36,7 @@ func NewAIHandler(newsService *services.NewsService) *AIHandler {
 func (h *AIHandler) AnalyzeNews(c *gin.Context) {
 	var req models.AIAnalysisRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "请求参数无效", err.Error())
+		utils.BadRequest(c, "请求参数无效")
 		return
 	}
 
@@ -53,11 +52,11 @@ func (h *AIHandler) AnalyzeNews(c *gin.Context) {
 	// 执行分析
 	analysis, err := h.aiService.AnalyzeNews(req.TargetID, req)
 	if err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "分析失败", err.Error())
+		utils.InternalServerError(c, "分析失败")
 		return
 	}
 
-	utils.SuccessResponse(c, "分析成功", analysis.ToResponse())
+	utils.Success(c, analysis.ToResponse())
 }
 
 // AnalyzeEvent 分析事件
@@ -72,7 +71,7 @@ func (h *AIHandler) AnalyzeNews(c *gin.Context) {
 func (h *AIHandler) AnalyzeEvent(c *gin.Context) {
 	var req models.AIAnalysisRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "请求参数无效", err.Error())
+		utils.BadRequest(c, "请求参数无效")
 		return
 	}
 
@@ -94,11 +93,11 @@ func (h *AIHandler) AnalyzeEvent(c *gin.Context) {
 	// 执行分析
 	analysis, err := h.aiService.AnalyzeEvent(req.TargetID, req)
 	if err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "分析失败", err.Error())
+		utils.InternalServerError(c, "分析失败")
 		return
 	}
 
-	utils.SuccessResponse(c, "分析成功", analysis.ToResponse())
+	utils.Success(c, analysis.ToResponse())
 }
 
 // GetAnalysis 获取分析结果
@@ -116,13 +115,13 @@ func (h *AIHandler) GetAnalysis(c *gin.Context) {
 	targetIDStr := c.Query("target_id")
 
 	if analysisType == "" || targetIDStr == "" {
-		utils.ErrorResponse(c, http.StatusBadRequest, "缺少必要参数", nil)
+		utils.BadRequest(c, "缺少必要参数")
 		return
 	}
 
 	targetID, err := strconv.ParseUint(targetIDStr, 10, 32)
 	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "目标ID无效", nil)
+		utils.BadRequest(c, "目标ID无效")
 		return
 	}
 
@@ -133,17 +132,17 @@ func (h *AIHandler) GetAnalysis(c *gin.Context) {
 	case "event":
 		aiType = models.AIAnalysisTypeEvent
 	default:
-		utils.ErrorResponse(c, http.StatusBadRequest, "分析类型无效", nil)
+		utils.BadRequest(c, "分析类型无效")
 		return
 	}
 
 	analysis, err := h.aiService.GetAnalysis(aiType, uint(targetID))
 	if err != nil {
-		utils.ErrorResponse(c, http.StatusNotFound, "分析结果未找到", nil)
+		utils.NotFound(c, "分析结果未找到")
 		return
 	}
 
-	utils.SuccessResponse(c, "获取成功", analysis.ToResponse())
+	utils.Success(c, analysis.ToResponse())
 }
 
 // BatchAnalyzeNews 批量分析新闻
@@ -169,7 +168,7 @@ func (h *AIHandler) BatchAnalyzeNews(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "请求参数无效", err.Error())
+		utils.BadRequest(c, "请求参数无效")
 		return
 	}
 
@@ -206,7 +205,7 @@ func (h *AIHandler) BatchAnalyzeNews(c *gin.Context) {
 		"errors":  errors,
 	}
 
-	utils.SuccessResponse(c, "批量分析完成", response)
+	utils.Success(c, response)
 }
 
 // GetAnalysisStats 获取分析统计
@@ -251,7 +250,7 @@ func (h *AIHandler) GetAnalysisStats(c *gin.Context) {
 		stats.SuccessRate = float64(stats.TotalProcessed) / float64(stats.TotalAnalyses) * 100
 	}
 
-	utils.SuccessResponse(c, "获取统计信息成功", stats)
+	utils.Success(c, stats)
 }
 
 // SummarizeNews godoc
@@ -270,13 +269,13 @@ func (h *AIHandler) SummarizeNews(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "Invalid news ID", err.Error())
+		utils.BadRequest(c, "Invalid news ID")
 		return
 	}
 
 	news, err := h.newsService.GetNewsByID(uint(id))
 	if err != nil {
-		utils.ErrorResponse(c, http.StatusNotFound, "News not found", err.Error())
+		utils.NotFound(c, "News not found")
 		return
 	}
 
@@ -289,9 +288,9 @@ func (h *AIHandler) SummarizeNews(c *gin.Context) {
 
 	analysis, err := h.aiService.AnalyzeNews(news.ID, analysisReq)
 	if err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "Failed to generate summary", err.Error())
+		utils.InternalServerError(c, "Failed to generate summary")
 		return
 	}
 
-	utils.SuccessResponse(c, "总结生成成功", gin.H{"summary": analysis.Summary})
+	utils.Success(c, gin.H{"summary": analysis.Summary})
 }
