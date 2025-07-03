@@ -93,8 +93,6 @@ func (s *UserService) Login(req *models.LoginRequest) (*models.User, string, err
 	return &user, token, nil
 }
 
-
-
 // get user by id
 func (s *UserService) GetUserByID(id uint) (*models.User, error) {
 	var user models.User
