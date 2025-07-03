@@ -168,18 +168,26 @@ func (s *NewsService) GetAllNews(page, pageSize int) ([]models.News, int64, erro
 		return nil, 0, fmt.Errorf("failed to count total news: %w", err)
 	}
 
-	// 计算分页偏移量
-	offset := (page - 1) * pageSize
-	if offset < 0 { // 确保 offset 不为负
-		offset = 0
-	}
-	if pageSize <= 0 { // 确保 pageSize 大于0
-		pageSize = 10 // 默认值
-	}
+	// 如果pageSize为-1，返回所有数据，否则进行分页
+	if pageSize == -1 {
+		// 返回所有数据，不进行分页
+		if err := s.db.Find(&newsList).Error; err != nil {
+			return nil, 0, fmt.Errorf("failed to get all news: %w", err)
+		}
+	} else {
+		// 计算分页偏移量
+		offset := (page - 1) * pageSize
+		if offset < 0 { // 确保 offset 不为负
+			offset = 0
+		}
+		if pageSize <= 0 { // 确保 pageSize 大于0
+			pageSize = 10 // 默认值
+		}
 
-	// 查询带分页的新闻数据
-	if err := s.db.Offset(offset).Limit(pageSize).Find(&newsList).Error; err != nil {
-		return nil, 0, fmt.Errorf("failed to get all news with pagination: %w", err)
+		// 查询带分页的新闻数据
+		if err := s.db.Offset(offset).Limit(pageSize).Find(&newsList).Error; err != nil {
+			return nil, 0, fmt.Errorf("failed to get all news with pagination: %w", err)
+		}
 	}
 
 	return newsList, total, nil

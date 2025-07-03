@@ -85,18 +85,25 @@ func (h *NewsHandler) GetNewsByID(c *gin.Context) {
 }
 
 func (h *NewsHandler) GetAllNews(c *gin.Context) {
-	// 获取查询参数中的页码和每页大小，并设置默认值
+	// 获取查询参数中的页码和每页大小
 	pageStr := c.DefaultQuery("page", "1")
-	sizeStr := c.DefaultQuery("size", "10")
+	sizeStr := c.Query("size") // 不设置默认值，如果没有指定则返回所有数据
 
-	// 转换页码和每页大小为整数，并处理无效值
+	// 转换页码为整数，并处理无效值
 	page, err := strconv.Atoi(pageStr)
 	if err != nil || page < 1 {
 		page = 1
 	}
-	size, err := strconv.Atoi(sizeStr)
-	if err != nil || size < 1 || size > 100 { // 限制每页最大大小，防止过大查询
-		size = 10
+	
+	// 处理size参数：如果未指定或为空，则返回所有数据
+	var size int
+	if sizeStr == "" {
+		size = -1 // 使用-1表示返回所有数据
+	} else {
+		size, err = strconv.Atoi(sizeStr)
+		if err != nil || size < 1 {
+			size = -1 // 无效值时也返回所有数据
+		}
 	}
 
 	// 调用 NewsService 的 GetAllNews 方法获取新闻列表和总数
