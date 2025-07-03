@@ -36,31 +36,55 @@ func NewFollowHandler() *FollowHandler {
 func (h *FollowHandler) AddFollow(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "Unauthorized",
+			"data":    nil,
+		})
 		return
 	}
 
 	var req models.AddFollowRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": err.Error(),
+			"data":    nil,
+		})
 		return
 	}
 
 	err := h.followService.AddFollow(userID.(uint), req.EventID)
 	if err != nil {
-		if err.Error() == "already following" {
-			c.JSON(http.StatusConflict, gin.H{"error": "Already following this event"})
+		if err.Error() == "already following this event" {
+			c.JSON(http.StatusConflict, gin.H{
+				"code":    409,
+				"message": "Already following this event",
+				"data":    nil,
+			})
 			return
 		}
 		if err.Error() == "event not found" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Event not found"})
+			c.JSON(http.StatusNotFound, gin.H{
+				"code":    404,
+				"message": "Event not found",
+				"data":    nil,
+			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": err.Error(),
+			"data":    nil,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Event followed successfully"})
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "Event followed successfully",
+		"data":    nil,
+	})
 }
 
 // RemoveFollow 取消关注
@@ -79,27 +103,47 @@ func (h *FollowHandler) AddFollow(c *gin.Context) {
 func (h *FollowHandler) RemoveFollow(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "Unauthorized",
+			"data":    nil,
+		})
 		return
 	}
 
 	var req models.RemoveFollowRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": err.Error(),
+			"data":    nil,
+		})
 		return
 	}
 
 	err := h.followService.RemoveFollow(userID.(uint), req.EventID)
 	if err != nil {
-		if err.Error() == "follow not found" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Follow relationship not found"})
+		if err.Error() == "follow relationship not found" {
+			c.JSON(http.StatusNotFound, gin.H{
+				"code":    404,
+				"message": "Follow relationship not found",
+				"data":    nil,
+			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": err.Error(),
+			"data":    nil,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Event unfollowed successfully"})
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "Event unfollowed successfully",
+		"data":    nil,
+	})
 }
 
 // GetFollows 获取用户关注的事件列表（包含统计信息）
@@ -165,23 +209,39 @@ func (h *FollowHandler) GetFollows(c *gin.Context) {
 func (h *FollowHandler) CheckFollow(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "Unauthorized",
+			"data":    nil,
+		})
 		return
 	}
 
 	var req models.CheckFollowRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": err.Error(),
+			"data":    nil,
+		})
 		return
 	}
 
 	isFollowing, err := h.followService.CheckFollow(userID.(uint), req.EventID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": err.Error(),
+			"data":    nil,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"is_following": isFollowing})
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "success",
+		"data":    gin.H{"is_following": isFollowing},
+	})
 }
 
 // GetAvailableEvents 获取可关注的事件列表
