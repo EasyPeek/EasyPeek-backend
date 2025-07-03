@@ -238,3 +238,78 @@ func (s *CommentService) GetAllComments(page, pageSize int) ([]models.Comment, i
 
 	return comments, total, nil
 }
+
+// LikeComment 点赞评论
+func (s *CommentService) LikeComment(commentID uint, userID uint) error {
+	// 检查数据库连接是否已初始化
+	if s.db == nil {
+		return errors.New("database connection not initialized")
+	}
+
+	// 验证评论是否存在
+	var comment models.Comment
+	if err := s.db.First(&comment, commentID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("comment not found")
+		}
+		return fmt.Errorf("failed to check comment existence: %w", err)
+	}
+
+	// 验证用户是否存在
+	var user models.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("user not found")
+		}
+		return fmt.Errorf("failed to check user existence: %w", err)
+	}
+
+	// 检查用户是否已经点赞过该评论（这里简化处理，实际可能需要一个点赞记录表）
+	// 由于没有点赞记录表，我们直接增加点赞数
+	// 在实际应用中，建议创建一个 comment_likes 表来记录用户点赞状态
+
+	// 增加评论的点赞数
+	if err := s.db.Model(&comment).Update("like_count", gorm.Expr("like_count + ?", 1)).Error; err != nil {
+		return fmt.Errorf("failed to like comment: %w", err)
+	}
+
+	return nil
+}
+
+// UnlikeComment 取消点赞评论
+func (s *CommentService) UnlikeComment(commentID uint, userID uint) error {
+	// 检查数据库连接是否已初始化
+	if s.db == nil {
+		return errors.New("database connection not initialized")
+	}
+
+	// 验证评论是否存在
+	var comment models.Comment
+	if err := s.db.First(&comment, commentID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("comment not found")
+		}
+		return fmt.Errorf("failed to check comment existence: %w", err)
+	}
+
+	// 验证用户是否存在
+	var user models.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("user not found")
+		}
+		return fmt.Errorf("failed to check user existence: %w", err)
+	}
+
+	// 检查点赞数是否大于0，避免出现负数
+	if comment.LikeCount <= 0 {
+		return errors.New("comment has no likes to unlike")
+	}
+
+	// 减少评论的点赞数
+	if err := s.db.Model(&comment).Update("like_count", gorm.Expr("like_count - ?", 1)).Error; err != nil {
+		return fmt.Errorf("failed to unlike comment: %w", err)
+	}
+
+	return nil
+}
