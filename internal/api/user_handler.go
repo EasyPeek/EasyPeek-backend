@@ -102,6 +102,18 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	if req.Avatar != "" {
 		user.Avatar = req.Avatar
 	}
+	if req.Phone != "" {
+		user.Phone = req.Phone
+	}
+	if req.Location != "" {
+		user.Location = req.Location
+	}
+	if req.Bio != "" {
+		user.Bio = req.Bio
+	}
+	if req.Interests != "" {
+		user.Interests = req.Interests
+	}
 
 	if err := h.userService.UpdateUser(user); err != nil {
 		utils.InternalServerError(c, err.Error())

@@ -94,7 +94,7 @@ func (h *NewsHandler) GetAllNews(c *gin.Context) {
 	if err != nil || page < 1 {
 		page = 1
 	}
-	
+
 	// 处理size参数：如果未指定或为空，则返回所有数据
 	var size int
 	if sizeStr == "" {

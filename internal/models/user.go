@@ -8,16 +8,20 @@ import (
 )
 
 type User struct {
-	ID        uint           `json:"id" gorm:"primaryKey"`
-	Username  string         `json:"username" gorm:"uniqueIndex;not null"`
-	Email     string         `json:"email" gorm:"uniqueIndex;not null"`
-	Password  string         `json:"password" gorm:"not null"`
-	Avatar    string         `json:"avatar"`
-	Role      string         `json:"role" gorm:"default:user"`
-	Status    string         `json:"status" gorm:"default:active"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
+	ID          uint           `json:"id" gorm:"primaryKey"`
+	Username    string         `json:"username" gorm:"uniqueIndex;not null"`
+	Email       string         `json:"email" gorm:"uniqueIndex;not null"`
+	Password    string         `json:"password" gorm:"not null"`
+	Avatar      string         `json:"avatar"`
+	Phone       string         `json:"phone"`
+	Location    string         `json:"location"`
+	Bio         string         `json:"bio"`
+	Interests   string         `json:"interests"` // JSON字符串存储兴趣偏好数组
+	Role        string         `json:"role" gorm:"default:user"`
+	Status      string         `json:"status" gorm:"default:active"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 type UserResponse struct {
@@ -25,6 +29,10 @@ type UserResponse struct {
 	Username  string    `json:"username"`
 	Email     string    `json:"email"`
 	Avatar    string    `json:"avatar"`
+	Phone     string    `json:"phone"`
+	Location  string    `json:"location"`
+	Bio       string    `json:"bio"`
+	Interests string    `json:"interests"`
 	Role      string    `json:"role"`
 	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
@@ -46,8 +54,12 @@ type RegisterRequest struct {
 
 // UpdateUser
 type UpdateUserRequest struct {
-	Username string `json:"username" binding:"omitempty,min=3,max=20"`
-	Avatar   string `json:"avatar"`
+	Username  string `json:"username" binding:"omitempty,min=3,max=20"`
+	Avatar    string `json:"avatar"`
+	Phone     string `json:"phone"`
+	Location  string `json:"location"`
+	Bio       string `json:"bio"`
+	Interests string `json:"interests"`
 }
 
 // ChangePassword
@@ -90,6 +102,10 @@ func (u *User) ToResponse() UserResponse {
 		Username:  u.Username,
 		Email:     u.Email,
 		Avatar:    u.Avatar,
+		Phone:     u.Phone,
+		Location:  u.Location,
+		Bio:       u.Bio,
+		Interests: u.Interests,
 		Role:      u.Role,
 		Status:    u.Status,
 		CreatedAt: u.CreatedAt,
