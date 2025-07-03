@@ -248,3 +248,83 @@ func (h *CommentHandler) GetAllComments(c *gin.Context) {
 	// 返回带分页信息成功的响应
 	utils.SuccessWithPagination(c, commentResponses, total, page, size)
 }
+
+// LikeComment 点赞评论
+func (h *CommentHandler) LikeComment(c *gin.Context) {
+	// 从 URL 参数中获取评论ID
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		utils.BadRequest(c, "Invalid comment ID")
+		return
+	}
+
+	// 从 Gin 上下文中获取用户ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.Unauthorized(c, "User not authenticated")
+		return
+	}
+	// 将 userID 转换为 uint 类型
+	likerID, ok := userID.(uint)
+	if !ok {
+		utils.InternalServerError(c, "Failed to get user ID from context")
+		return
+	}
+
+	// 调用 CommentService 的 LikeComment 方法
+	if err := h.commentService.LikeComment(uint(id), likerID); err != nil {
+		if err.Error() == "comment not found" {
+			utils.NotFound(c, err.Error())
+		} else if err.Error() == "user not found" {
+			utils.NotFound(c, err.Error())
+		} else {
+			utils.InternalServerError(c, err.Error())
+		}
+		return
+	}
+
+	// 成功点赞，返回成功消息
+	utils.Success(c, gin.H{"message": "Comment liked successfully"})
+}
+
+// UnlikeComment 取消点赞评论
+func (h *CommentHandler) UnlikeComment(c *gin.Context) {
+	// 从 URL 参数中获取评论ID
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		utils.BadRequest(c, "Invalid comment ID")
+		return
+	}
+
+	// 从 Gin 上下文中获取用户ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.Unauthorized(c, "User not authenticated")
+		return
+	}
+	// 将 userID 转换为 uint 类型
+	unlikerID, ok := userID.(uint)
+	if !ok {
+		utils.InternalServerError(c, "Failed to get user ID from context")
+		return
+	}
+
+	// 调用 CommentService 的 UnlikeComment 方法
+	if err := h.commentService.UnlikeComment(uint(id), unlikerID); err != nil {
+		if err.Error() == "comment not found" {
+			utils.NotFound(c, err.Error())
+		} else if err.Error() == "user not found" {
+			utils.NotFound(c, err.Error())
+		} else if err.Error() == "comment has no likes to unlike" {
+			utils.BadRequest(c, err.Error())
+		} else {
+			utils.InternalServerError(c, err.Error())
+		}
+		return
+	}
+
+	// 成功取消点赞，返回成功消息
+	utils.Success(c, gin.H{"message": "Comment unliked successfully"})
+}

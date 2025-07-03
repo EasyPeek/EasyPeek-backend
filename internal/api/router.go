@@ -111,8 +111,10 @@ func SetupRoutes() *gin.Engine {
 			authComments := comments.Group("")
 			authComments.Use(middleware.AuthMiddleware())
 			{
-				authComments.POST("", commentHandler.CreateComment)       // 创建评论
-				authComments.DELETE("/:id", commentHandler.DeleteComment) // 删除评论
+				authComments.POST("", commentHandler.CreateComment)            // 创建评论
+				authComments.DELETE("/:id", commentHandler.DeleteComment)      // 删除评论
+				authComments.POST("/:id/like", commentHandler.LikeComment)     // 点赞评论
+				authComments.DELETE("/:id/like", commentHandler.UnlikeComment) // 取消点赞评论
 			}
 		}
 
