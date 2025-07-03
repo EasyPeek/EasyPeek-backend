@@ -68,3 +68,25 @@ type JWTConfig struct {
 type CORSConfig struct {
 	AllowOrigins []string `mapstructure:"allow_origins"`
 }
+type AIConfig struct {
+	Provider    string  `mapstructure:"provider"`
+	APIKey      string  `mapstructure:"api_key"`
+	BaseURL     string  `mapstructure:"base_url"`
+	Model       string  `mapstructure:"model"`
+	Timeout     int     `mapstructure:"timeout"`
+	MaxTokens   int     `mapstructure:"max_tokens"`
+	Temperature float64 `mapstructure:"temperature"`
+	// OpenRouter特有配置
+	SiteURL  string `mapstructure:"site_url"`  // 你的网站URL
+	SiteName string `mapstructure:"site_name"` // 你的应用名称
+	// 自动分析配置
+	AutoAnalysis AutoAnalysisConfig `mapstructure:"auto_analysis"`
+}
+
+type AutoAnalysisConfig struct {
+	Enabled              bool `mapstructure:"enabled"`                // 是否启用自动AI分析
+	AnalyzeOnFetch       bool `mapstructure:"analyze_on_fetch"`       // 在RSS抓取时即时分析
+	BatchProcessInterval int  `mapstructure:"batch_process_interval"` // 批处理间隔（分钟）
+	MaxBatchSize         int  `mapstructure:"max_batch_size"`         // 每次批处理的最大数量
+	AnalysisDelay        int  `mapstructure:"analysis_delay"`         // 每个分析之间的延迟（秒）
+}
