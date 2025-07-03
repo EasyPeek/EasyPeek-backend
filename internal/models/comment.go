@@ -10,7 +10,7 @@ import (
 type Comment struct {
 	ID        uint           `json:"id" gorm:"primaryKey"`
 	NewsID    uint           `json:"news_id" gorm:"not null;index"`     // 新闻ID
-	UserID    uint           `json:"user_id" gorm:"not null;index"`     // 发表评论的用户ID
+	UserID    *uint          `json:"user_id" gorm:"index"`              // 发表评论的用户ID，可为空（匿名评论）
 	Content   string         `json:"content" gorm:"type:text;not null"` // 评论的内容
 	LikeCount int            `json:"like_count" gorm:"default:0"`       // 点赞数
 	CreatedAt time.Time      `json:"created_at"`                        // 评论的时间
@@ -23,16 +23,23 @@ type Comment struct {
 
 // CommentResponse 用于向前端返回评论信息时，过滤掉敏感或不需要的字段
 type CommentResponse struct {
-	ID        uint      `json:"id"`
-	NewsID    uint      `json:"news_id"`
-	UserID    uint      `json:"user_id"`
-	Content   string    `json:"content"`
-	LikeCount int       `json:"like_count"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          uint      `json:"id"`
+	NewsID      uint      `json:"news_id"`
+	UserID      *uint     `json:"user_id"` // 可为空，表示匿名用户
+	Content     string    `json:"content"`
+	LikeCount   int       `json:"like_count"`
+	CreatedAt   time.Time `json:"created_at"`
+	IsAnonymous bool      `json:"is_anonymous"` // 是否为匿名评论
 }
 
 // CommentCreateRequest 用于创建评论时的请求体
 type CommentCreateRequest struct {
+	NewsID  uint   `json:"news_id" binding:"required"`                // 新闻ID必填
+	Content string `json:"content" binding:"required,min=1,max=1000"` // 评论内容必填，限制长度
+}
+
+// CommentAnonymousCreateRequest 用于匿名用户创建评论时的请求体
+type CommentAnonymousCreateRequest struct {
 	NewsID  uint   `json:"news_id" binding:"required"`                // 新闻ID必填
 	Content string `json:"content" binding:"required,min=1,max=1000"` // 评论内容必填，限制长度
 }
@@ -49,12 +56,13 @@ type CommentLikeRequest struct {
 
 func (c *Comment) ToResponse() CommentResponse {
 	response := CommentResponse{
-		ID:        c.ID,
-		NewsID:    c.NewsID,
-		UserID:    c.UserID,
-		Content:   c.Content,
-		LikeCount: c.LikeCount,
-		CreatedAt: c.CreatedAt,
+		ID:          c.ID,
+		NewsID:      c.NewsID,
+		UserID:      c.UserID,
+		Content:     c.Content,
+		LikeCount:   c.LikeCount,
+		CreatedAt:   c.CreatedAt,
+		IsAnonymous: c.UserID == nil, // 如果UserID为空，则为匿名评论
 	}
 
 	return response
