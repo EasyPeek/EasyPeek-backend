@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/EasyPeek/EasyPeek-backend/internal/middleware"
+	"github.com/EasyPeek/EasyPeek-backend/internal/services"
 	"github.com/gin-gonic/gin"
 )
 
@@ -28,6 +29,10 @@ func SetupRoutes() *gin.Engine {
 	commentHandler := NewCommentHandler()
 	messageHandler := NewMessageHandler()
 	followHandler := NewFollowHandler()
+
+	// initialize services for AI handler
+	newsService := services.NewNewsService()
+	aiHandler := NewAIHandler(newsService)
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")
@@ -251,6 +256,18 @@ func SetupRoutes() *gin.Engine {
 			{
 				messageAdmin.POST("", messageHandler.CreateMessage) // 创建系统消息
 			}
+		}
+
+		// AI routes
+		ai := v1.Group("/ai")
+		{
+			// 公开路由
+			ai.POST("/analyze", aiHandler.AnalyzeNews)            // 分析新闻
+			ai.POST("/analyze-event", aiHandler.AnalyzeEvent)     // 分析事件
+			ai.GET("/analysis", aiHandler.GetAnalysis)            // 获取分析结果
+			ai.POST("/batch-analyze", aiHandler.BatchAnalyzeNews) // 批量分析
+			ai.GET("/stats", aiHandler.GetAnalysisStats)          // 获取分析统计
+			ai.POST("/summarize", aiHandler.SummarizeNews)        // 快速摘要
 		}
 
 	}
