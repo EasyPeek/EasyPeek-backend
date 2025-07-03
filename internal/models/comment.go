@@ -12,6 +12,7 @@ type Comment struct {
 	NewsID    uint           `json:"news_id" gorm:"not null;index"`     // 新闻ID
 	UserID    uint           `json:"user_id" gorm:"not null;index"`     // 发表评论的用户ID
 	Content   string         `json:"content" gorm:"type:text;not null"` // 评论的内容
+	LikeCount int            `json:"like_count" gorm:"default:0"`       // 点赞数
 	CreatedAt time.Time      `json:"created_at"`                        // 评论的时间
 	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`                    // 软删除
 
@@ -26,6 +27,7 @@ type CommentResponse struct {
 	NewsID    uint      `json:"news_id"`
 	UserID    uint      `json:"user_id"`
 	Content   string    `json:"content"`
+	LikeCount int       `json:"like_count"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -40,12 +42,18 @@ type CommentDeleteRequest struct {
 	CommentID uint `json:"comment_id" binding:"required"` // 评论ID必填
 }
 
+// CommentLikeRequest 用于点赞评论时的请求体
+type CommentLikeRequest struct {
+	CommentID uint `json:"comment_id" binding:"required"` // 评论ID必填
+}
+
 func (c *Comment) ToResponse() CommentResponse {
 	response := CommentResponse{
 		ID:        c.ID,
 		NewsID:    c.NewsID,
 		UserID:    c.UserID,
 		Content:   c.Content,
+		LikeCount: c.LikeCount,
 		CreatedAt: c.CreatedAt,
 	}
 
