@@ -2,9 +2,9 @@ package api
 
 import (
 	"github.com/EasyPeek/EasyPeek-backend/internal/ai"
+	"github.com/EasyPeek/EasyPeek-backend/internal/middleware"
 	"github.com/EasyPeek/EasyPeek-backend/internal/models/middleware"
 	"github.com/EasyPeek/EasyPeek-backend/internal/services"
-	"github.com/EasyPeek/EasyPeek-backend/internal/middleware"
 	"github.com/gin-gonic/gin"
 )
 
@@ -85,8 +85,6 @@ func SetupRoutes(aiService *ai.AIService, newsService *services.NewsService) *gi
 		news := v1.Group("/news")
 		{
 
-			// 公开路由 - 前端可以直接访问
-<<<<<<< HEAD
 			news.GET("", newsHandler.GetAllNews)                      // 获取所有新闻列表（带分页）
 			news.GET("/hot", newsHandler.GetHotNews)                  // 获取热门新闻
 			news.GET("/latest", newsHandler.GetLatestNews)            // 获取最新新闻
@@ -96,15 +94,6 @@ func SetupRoutes(aiService *ai.AIService, newsService *services.NewsService) *gi
 			news.GET("/hot-keywords", newsHandler.GetHotKeywords)     // 获取热门关键词
 			news.GET("/event/:eventId", newsHandler.GetNewsByEventID) // 根据事件ID获取相关新闻
 			news.POST("/:id/summarize", aiHandler.SummarizeNews)      // 总结新闻
-=======
-			news.GET("", newsHandler.GetAllNews)                           // 获取所有新闻列表（带分页）
-			news.GET("/hot", newsHandler.GetHotNews)                       // 获取热门新闻
-			news.GET("/latest", newsHandler.GetLatestNews)                 // 获取最新新闻
-			news.GET("/category/:category", newsHandler.GetNewsByCategory) // 按分类获取新闻
-			news.GET("/:id", newsHandler.GetNewsByID)                      // 根据ID获取单条新闻
-			news.GET("/search", newsHandler.SearchNews)                    // 搜索新闻
->>>>>>> origin
-
 			// 需要身份验证的路由
 			authNews := news.Group("")
 			authNews.Use(middleware.AuthMiddleware())
