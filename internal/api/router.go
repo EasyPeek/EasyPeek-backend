@@ -167,30 +167,6 @@ func SetupRoutes() *gin.Engine {
 			}
 		}
 
-		// RSS routes
-		rss := v1.Group("/rss")
-		{
-			// 公开路由
-			rss.GET("/news", rssHandler.GetNews)
-			rss.GET("/news/hot", rssHandler.GetHotNews)
-			rss.GET("/news/latest", rssHandler.GetLatestNews)
-			rss.GET("/news/category/:category", rssHandler.GetNewsByCategory)
-			rss.GET("/news/:id", rssHandler.GetNewsItem)
-
-			// 管理员路由
-			adminRSS := rss.Group("")
-			adminRSS.Use(middleware.AuthMiddleware())
-			adminRSS.Use(middleware.RoleMiddleware(middleware.RoleAdmin))
-			{
-				adminRSS.GET("/sources", rssHandler.GetRSSSources)
-				adminRSS.POST("/sources", rssHandler.CreateRSSSource)
-				adminRSS.PUT("/sources/:id", rssHandler.UpdateRSSSource)
-				adminRSS.DELETE("/sources/:id", rssHandler.DeleteRSSSource)
-				adminRSS.POST("/sources/:id/fetch", rssHandler.FetchRSSFeed)
-				adminRSS.POST("/fetch-all", rssHandler.FetchAllRSSFeeds)
-			}
-		}
-
 		// admin routes
 		admin := v1.Group("/admin")
 		admin.Use(middleware.AuthMiddleware())
