@@ -12,6 +12,7 @@ type Config struct {
 	Redis    RedisConfig    `mapstructure:"redis"`
 	JWT      JWTConfig      `mapstructure:"jwt"`
 	CORS     CORSConfig     `mapstructure:"cors"`
+	AI       AIConfig       `mapstructure:"ai"`
 }
 
 var AppConfig *Config
