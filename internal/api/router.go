@@ -58,11 +58,13 @@ func SetupRoutes() *gin.Engine {
 		messages := v1.Group("/messages")
 		messages.Use(middleware.AuthMiddleware())
 		{
-			messages.GET("", messageHandler.GetMessages)                 // 获取消息列表
-			messages.GET("/unread-count", messageHandler.GetUnreadCount) // 获取未读消息数量
-			messages.PUT("/:id/read", messageHandler.MarkAsRead)         // 标记消息已读
-			messages.PUT("/read-all", messageHandler.MarkAllAsRead)      // 标记全部已读
-			messages.DELETE("/:id", messageHandler.DeleteMessage)        // 删除消息
+			messages.GET("", messageHandler.GetMessages)                                             // 获取消息列表
+			messages.GET("/unread-count", messageHandler.GetUnreadCount)                             // 获取未读消息数量
+			messages.GET("/followed-events-news", messageHandler.GetFollowedEventsLatestNews)        // 获取关注事件的最新新闻
+			messages.GET("/followed-events-recent-news", messageHandler.GetFollowedEventsRecentNews) // 获取关注事件的最近新闻
+			messages.PUT("/:id/read", messageHandler.MarkAsRead)                                     // 标记消息已读
+			messages.PUT("/read-all", messageHandler.MarkAllAsRead)                                  // 标记全部已读
+			messages.DELETE("/:id", messageHandler.DeleteMessage)                                    // 删除消息
 		}
 
 		// follow routes
@@ -204,9 +206,8 @@ func SetupRoutes() *gin.Engine {
 				users.GET("/active", userHandler.GetActiveUsers) // 获取活跃用户（保持兼容）
 				users.GET("/:id", adminHandler.GetUserByID)      // 获取指定用户
 
-				
-				users.PUT("/:id", adminHandler.UpdateUser)       // 更新用户信息
-				users.DELETE("/:id", adminHandler.DeleteUser)    // 管理员删除用户（硬删除）
+				users.PUT("/:id", adminHandler.UpdateUser)    // 更新用户信息
+				users.DELETE("/:id", adminHandler.DeleteUser) // 管理员删除用户（硬删除）
 				// 保留原有的单独角色和状态更新接口
 				// users.PUT("/:id/role", userHandler.UpdateUserRole)     // 更新用户角色
 				// users.PUT("/:id/status", userHandler.UpdateUserStatus) // 更新用户状态

@@ -74,3 +74,24 @@ func (m *Message) ToResponse() MessageResponse {
 		CreatedAt:   m.CreatedAt,
 	}
 }
+
+// EventLatestNewsResponse 关注事件最新新闻响应结构
+type EventLatestNewsResponse struct {
+	EventID     uint      `json:"event_id"`
+	EventTitle  string    `json:"event_title"`
+	EventStatus string    `json:"event_status"`
+	NewsID      uint      `json:"news_id"`
+	NewsTitle   string    `json:"news_title"`
+	NewsSummary string    `json:"news_summary"`
+	NewsSource  string    `json:"news_source"`
+	NewsAuthor  string    `json:"news_author"`
+	NewsLink    string    `json:"news_link"`
+	PublishedAt time.Time `json:"published_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// FollowedEventsNewsResponse 用户关注事件新闻列表响应
+type FollowedEventsNewsResponse struct {
+	TotalEvents int                       `json:"total_events"`
+	EventsNews  []EventLatestNewsResponse `json:"events_news"`
+}
