@@ -56,6 +56,43 @@ func main() {
 	}
 	defer rssScheduler.Stop()
 
+	// initialize AI event generation service
+	aiEventService := services.NewAIEventService()
+
+	// 配置AI事件服务处理所有未关联的新闻
+	aiEventService.SetMaxNewsLimit(0) // 0表示不限制，处理所有新闻
+	log.Println("AI事件服务配置：处理所有未关联的新闻")
+
+	// 启动AI事件生成定时器
+	aiEventTicker := time.NewTicker(30 * time.Minute) // 每30分钟执行一次
+	defer aiEventTicker.Stop()
+
+	// 启动AI事件生成的goroutine
+	go func() {
+		log.Println("AI事件生成服务已启动，每30分钟执行一次")
+
+		// 立即执行一次事件生成（可选）
+		if aiEventService.IsEnabled() {
+			log.Println("执行初始AI事件生成...")
+			if err := aiEventService.GenerateEventsFromNews(); err != nil {
+				log.Printf("初始AI事件生成失败: %v", err)
+			}
+		}
+
+		for range aiEventTicker.C {
+			if aiEventService.IsEnabled() {
+				log.Println("开始定时AI事件生成...")
+				if err := aiEventService.GenerateEventsFromNews(); err != nil {
+					log.Printf("定时AI事件生成失败: %v", err)
+				} else {
+					log.Println("定时AI事件生成完成")
+				}
+			} else {
+				log.Println("AI事件生成服务未启用，跳过本次执行")
+			}
+		}
+	}()
+
 	// set up routes
 	router := api.SetupRoutes()
 
@@ -74,6 +111,12 @@ func main() {
 		<-sigChan
 
 		log.Println("Shutting down server...")
+
+		// 停止AI事件生成定时器
+		aiEventTicker.Stop()
+		log.Println("AI事件生成定时器已停止")
+
+		// 停止RSS调度器
 		rssScheduler.Stop()
 
 		if err := server.Close(); err != nil {
@@ -83,6 +126,7 @@ func main() {
 
 	log.Println("Server is starting on :8080")
 	log.Println("RSS scheduler is running")
+	log.Println("AI Event generation service is running (every 30 minutes)")
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Failed to start server: %v", err)
