@@ -323,34 +323,8 @@ func (s *SeedService) SeedRSSources() error {
 		return err
 	}
 
-	// 如果已经存在RSS源，不需要创建
-	if rssCount > 0 {
-		log.Println("RSS sources already exist, skipping seed")
-		return nil
-	}
-
 	// 创建一些默认的RSS源
 	defaultSources := []models.RSSSource{
-		{
-			Name:        "新浪新闻",
-			URL:         "http://rss.sina.com.cn/news/china/focus15.xml",
-			Category:    "国内新闻",
-			Language:    "zh",
-			IsActive:    true,
-			Description: "新浪网国内新闻RSS源",
-			Priority:    1,
-			UpdateFreq:  60,
-		},
-		{
-			Name:        "网易科技",
-			URL:         "http://rss.163.com/rss/tech_index.xml",
-			Category:    "科技",
-			Language:    "zh",
-			IsActive:    true,
-			Description: "网易科技新闻RSS源",
-			Priority:    1,
-			UpdateFreq:  60,
-		},
 		{
 			Name:        "澎湃新闻",
 			URL:         "https://feedx.net/rss/thepaper.xml",
@@ -388,6 +362,36 @@ func (s *SeedService) SeedRSSources() error {
 			Language:    "zh",
 			IsActive:    true,
 			Description: "经济日报全文RSS源，提供权威财经和经济政策新闻",
+			Priority:    1,
+			UpdateFreq:  60,
+		},
+		{
+			Name:        "南方周末",
+			URL:         "https://feedx.net/rss/infzm.xml",
+			Category:    "时政新闻",
+			Language:    "zh",
+			IsActive:    true,
+			Description: "南方周末全文RSS源，提供权威时政和社会新闻",
+			Priority:    1,
+			UpdateFreq:  60,
+		},
+		{
+			Name:        "凤凰军事",
+			URL:         "https://feedx.net/rss/ifengmil.xml",
+			Category:    "军事新闻",
+			Language:    "zh",
+			IsActive:    true,
+			Description: "凤凰军事全文RSS源，提供权威时政和军事新闻",
+			Priority:    1,
+			UpdateFreq:  60,
+		},
+		{
+			Name:        "3dmgame",
+			URL:         "https://feedx.net/rss/3dmgame.xml",
+			Category:    "游戏新闻",
+			Language:    "zh",
+			IsActive:    true,
+			Description: "3dmgame全文RSS源，提供权威游戏新闻",
 			Priority:    1,
 			UpdateFreq:  60,
 		},
