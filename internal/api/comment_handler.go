@@ -61,7 +61,7 @@ func (h *CommentHandler) CreateComment(c *gin.Context) {
 	}
 
 	// 成功创建，返回评论的响应格式
-	utils.Success(c, comment.ToResponse())
+	utils.Success(c, comment.ToResponse(&creatorID))
 }
 
 // ReplyToComment 回复评论
@@ -107,7 +107,7 @@ func (h *CommentHandler) ReplyToComment(c *gin.Context) {
 	}
 
 	// 成功创建回复，返回回复的响应格式
-	utils.Success(c, reply.ToResponse())
+	utils.Success(c, reply.ToResponse(&replierID))
 }
 
 // CreateAnonymousComment 创建匿名评论
@@ -133,8 +133,8 @@ func (h *CommentHandler) CreateAnonymousComment(c *gin.Context) {
 		return
 	}
 
-	// 成功创建，返回评论的响应格式
-	utils.Success(c, comment.ToResponse())
+	// 成功创建，返回评论的响应格式（匿名评论没有用户ID）
+	utils.Success(c, comment.ToResponse(nil))
 }
 
 // GetCommentByID 根据ID获取单条评论
@@ -145,6 +145,14 @@ func (h *CommentHandler) GetCommentByID(c *gin.Context) {
 	if err != nil {
 		utils.BadRequest(c, "Invalid comment ID")
 		return
+	}
+
+	// 获取当前用户ID（如果已登录）
+	var currentUserID *uint
+	if userID, exists := c.Get("user_id"); exists {
+		if uid, ok := userID.(uint); ok {
+			currentUserID = &uid
+		}
 	}
 
 	// 调用 CommentService 的 GetCommentByID 方法
@@ -159,7 +167,7 @@ func (h *CommentHandler) GetCommentByID(c *gin.Context) {
 	}
 
 	// 成功获取，返回评论的响应格式
-	utils.Success(c, comment.ToResponse())
+	utils.Success(c, comment.ToResponse(currentUserID))
 }
 
 // GetCommentsByNewsID 根据新闻ID获取评论列表
@@ -186,8 +194,16 @@ func (h *CommentHandler) GetCommentsByNewsID(c *gin.Context) {
 		size = 10
 	}
 
+	// 获取当前用户ID（如果已登录）
+	var currentUserID *uint
+	if userID, exists := c.Get("user_id"); exists {
+		if uid, ok := userID.(uint); ok {
+			currentUserID = &uid
+		}
+	}
+
 	// 调用 CommentService 的 GetCommentsByNewsID 方法
-	comments, total, err := h.commentService.GetCommentsByNewsID(uint(newsID), page, size)
+	comments, total, err := h.commentService.GetCommentsByNewsID(uint(newsID), page, size, currentUserID)
 	if err != nil {
 		utils.InternalServerError(c, err.Error())
 		return
@@ -198,7 +214,7 @@ func (h *CommentHandler) GetCommentsByNewsID(c *gin.Context) {
 
 	var commentResponses []models.CommentResponse
 	for _, comment := range comments {
-		commentResponses = append(commentResponses, comment.ToResponse())
+		commentResponses = append(commentResponses, comment.ToResponse(currentUserID))
 	}
 
 	// 返回带分页信息成功的响应
@@ -229,6 +245,14 @@ func (h *CommentHandler) GetCommentsByUserID(c *gin.Context) {
 		size = 10
 	}
 
+	// 获取当前用户ID（如果已登录）
+	var currentUserID *uint
+	if userIDFromContext, exists := c.Get("user_id"); exists {
+		if uid, ok := userIDFromContext.(uint); ok {
+			currentUserID = &uid
+		}
+	}
+
 	// 调用 CommentService 的 GetCommentsByUserID 方法
 	comments, total, err := h.commentService.GetCommentsByUserID(uint(userID), page, size)
 	if err != nil {
@@ -238,7 +262,7 @@ func (h *CommentHandler) GetCommentsByUserID(c *gin.Context) {
 
 	var commentResponses []models.CommentResponse
 	for _, comment := range comments {
-		commentResponses = append(commentResponses, comment.ToResponse())
+		commentResponses = append(commentResponses, comment.ToResponse(currentUserID))
 	}
 
 	// 返回带分页信息成功的响应
@@ -306,6 +330,14 @@ func (h *CommentHandler) GetAllComments(c *gin.Context) {
 		size = 10
 	}
 
+	// 获取当前用户ID（如果已登录）
+	var currentUserID *uint
+	if userID, exists := c.Get("user_id"); exists {
+		if uid, ok := userID.(uint); ok {
+			currentUserID = &uid
+		}
+	}
+
 	// 调用 CommentService 的 GetAllComments 方法
 	comments, total, err := h.commentService.GetAllComments(page, size)
 	if err != nil {
@@ -315,7 +347,7 @@ func (h *CommentHandler) GetAllComments(c *gin.Context) {
 
 	var commentResponses []models.CommentResponse
 	for _, comment := range comments {
-		commentResponses = append(commentResponses, comment.ToResponse())
+		commentResponses = append(commentResponses, comment.ToResponse(currentUserID))
 	}
 
 	// 返回带分页信息成功的响应
@@ -351,14 +383,23 @@ func (h *CommentHandler) LikeComment(c *gin.Context) {
 			utils.NotFound(c, err.Error())
 		} else if err.Error() == "user not found" {
 			utils.NotFound(c, err.Error())
+		} else if err.Error() == "user has already liked this comment" {
+			utils.BadRequest(c, err.Error())
 		} else {
 			utils.InternalServerError(c, err.Error())
 		}
 		return
 	}
 
-	// 成功点赞，返回成功消息
-	utils.Success(c, gin.H{"message": "Comment liked successfully"})
+	// 获取更新后的评论信息
+	comment, err := h.commentService.GetCommentByID(uint(id))
+	if err != nil {
+		utils.InternalServerError(c, "Failed to get updated comment")
+		return
+	}
+
+	// 成功点赞，返回更新后的评论信息
+	utils.Success(c, comment.ToResponse(&likerID))
 }
 
 // UnlikeComment 取消点赞评论
@@ -390,14 +431,21 @@ func (h *CommentHandler) UnlikeComment(c *gin.Context) {
 			utils.NotFound(c, err.Error())
 		} else if err.Error() == "user not found" {
 			utils.NotFound(c, err.Error())
-		} else if err.Error() == "comment has no likes to unlike" {
-			utils.BadRequest(c, err.Error())
+		} else if err.Error() == "like record not found" {
+			utils.NotFound(c, err.Error())
 		} else {
 			utils.InternalServerError(c, err.Error())
 		}
 		return
 	}
 
-	// 成功取消点赞，返回成功消息
-	utils.Success(c, gin.H{"message": "Comment unliked successfully"})
+	// 获取更新后的评论信息
+	comment, err := h.commentService.GetCommentByID(uint(id))
+	if err != nil {
+		utils.InternalServerError(c, "Failed to get updated comment")
+		return
+	}
+
+	// 成功取消点赞，返回更新后的评论信息
+	utils.Success(c, comment.ToResponse(&unlikerID))
 }

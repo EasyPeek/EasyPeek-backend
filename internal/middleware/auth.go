@@ -46,6 +46,33 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
+// OptionalAuthMiddleware 可选认证中间件
+// 如果有有效的token，会设置用户信息；如果没有token或token无效，不会中断请求
+func OptionalAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			// 没有token，继续处理请求
+			c.Next()
+			return
+		}
+
+		claims, err := utils.ParseToken(authHeader)
+		if err != nil {
+			// token无效，但不中断请求，继续处理
+			c.Next()
+			return
+		}
+
+		// token有效，设置用户信息
+		c.Set("user_id", claims.UserID)
+		c.Set("username", claims.Username)
+		c.Set("role", claims.Role)
+
+		c.Next()
+	}
+}
+
 // AdminAuthMiddleware 管理员认证中间件
 // 这个中间件必须在 AuthMiddleware 之后使用
 func AdminAuthMiddleware() gin.HandlerFunc {
