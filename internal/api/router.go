@@ -216,19 +216,6 @@ func SetupRoutes() *gin.Engine {
 				// users.PUT("/:id/status", userHandler.UpdateUserStatus) // 更新用户状态
 			}
 
-			// RSS Management
-			rss := admin.Group("/rss")
-			{
-				rss.GET("", rssHandler.GetRSSSources)               // 获取所有RSS源
-				rss.POST("", rssHandler.CreateRSSSource)            // 创建RSS源
-				rss.PUT("/:id", rssHandler.UpdateRSSSource)         // 更新RSS源
-				rss.DELETE("/:id", rssHandler.DeleteRSSSource)      // 删除RSS源
-				rss.POST("/:id/fetch", rssHandler.FetchRSSFeed)     // 手动抓取RSS源
-				rss.POST("/fetch-all", rssHandler.FetchAllRSSFeeds) // 抓取所有RSS源
-				rss.GET("/categories", rssHandler.GetRSSCategories) // 获取RSS分类列表
-				rss.GET("/stats", rssHandler.GetRSSStats)           // 获取RSS统计信息
-			}
-
 			// 事件管理
 			events := admin.Group("/events")
 			{
@@ -255,12 +242,15 @@ func SetupRoutes() *gin.Engine {
 			// RSS源管理
 			rssAdmin := admin.Group("/rss-sources")
 			{
-				rssAdmin.GET("", adminHandler.GetAllRSSSources)            // 获取所有RSS源
-				rssAdmin.POST("", adminHandler.CreateRSSSource)            // 创建RSS源
-				rssAdmin.PUT("/:id", adminHandler.UpdateRSSSource)         // 更新RSS源
-				rssAdmin.DELETE("/:id", adminHandler.DeleteRSSSource)      // 删除RSS源
-				rssAdmin.POST("/:id/fetch", adminHandler.FetchRSSFeed)     // 手动抓取RSS源
-				rssAdmin.POST("/fetch-all", adminHandler.FetchAllRSSFeeds) // 抓取所有RSS源
+				rssAdmin.GET("", rssHandler.GetRSSSources)                             // 获取所有RSS源
+				rssAdmin.POST("", rssHandler.CreateRSSSource)                          // 创建RSS源
+				rssAdmin.PUT("/:id", rssHandler.UpdateRSSSource)                       // 更新RSS源
+				rssAdmin.DELETE("/:id", rssHandler.DeleteRSSSource)                    // 删除RSS源
+				rssAdmin.POST("/:id/fetch", rssHandler.FetchRSSFeed)                   // 手动抓取RSS源
+				rssAdmin.POST("/fetch-all", rssHandler.FetchAllRSSFeeds)               // 抓取所有RSS源
+				rssAdmin.POST("/batch-analyze", aiHandler.BatchAnalyzeUnprocessedNews) // 批量AI分析未处理新闻
+				rssAdmin.GET("/categories", rssHandler.GetRSSCategories)               // 获取RSS分类列表
+				rssAdmin.GET("/stats", rssHandler.GetRSSStats)                         // 获取RSS统计信息
 			}
 
 			// 消息管理
@@ -274,12 +264,13 @@ func SetupRoutes() *gin.Engine {
 		ai := v1.Group("/ai")
 		{
 			// 公开路由
-			ai.POST("/analyze", aiHandler.AnalyzeNews)            // 分析新闻
-			ai.POST("/analyze-event", aiHandler.AnalyzeEvent)     // 分析事件
-			ai.GET("/analysis", aiHandler.GetAnalysis)            // 获取分析结果
-			ai.POST("/batch-analyze", aiHandler.BatchAnalyzeNews) // 批量分析
-			ai.GET("/stats", aiHandler.GetAnalysisStats)          // 获取分析统计
-			ai.POST("/summarize", aiHandler.SummarizeNews)        // 快速摘要
+			ai.POST("/analyze", aiHandler.AnalyzeNews)                                   // 分析新闻
+			ai.POST("/analyze-event", aiHandler.AnalyzeEvent)                            // 分析事件
+			ai.GET("/analysis", aiHandler.GetAnalysis)                                   // 获取分析结果
+			ai.POST("/batch-analyze", aiHandler.BatchAnalyzeNews)                        // 批量分析指定新闻
+			ai.POST("/batch-analyze-unprocessed", aiHandler.BatchAnalyzeUnprocessedNews) // 批量分析未处理新闻
+			ai.GET("/stats", aiHandler.GetAnalysisStats)                                 // 获取分析统计
+			ai.POST("/summarize", aiHandler.SummarizeNews)                               // 快速摘要
 		}
 
 	}

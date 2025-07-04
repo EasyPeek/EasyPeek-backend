@@ -517,7 +517,7 @@ func NewOpenAICompatibleProvider() *OpenAICompatibleProvider {
 func NewOpenAICompatibleProviderWithConfig(cfg *config.Config) *OpenAICompatibleProvider {
 	// 默认配置 - 修改为OpenRouter的默认配置
 	provider := &OpenAICompatibleProvider{
-		apiKey:      "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",
+		apiKey:      "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",
 		baseURL:     "https://openrouter.ai/api/v1",
 		model:       "google/gemini-2.0-flash-001", // 使用稳定的thinking版本
 		siteURL:     "http://localhost:5173/",
@@ -904,4 +904,109 @@ func (p *OpenAICompatibleProvider) callAPI(prompt string) (string, error) {
 
 	log.Printf("❌ API响应无有效内容 - 响应: %s", string(body))
 	return "", fmt.Errorf("no response from API")
+}
+
+// BatchAnalyzeUnprocessedNews 批量分析未处理的新闻
+func (s *AIService) BatchAnalyzeUnprocessedNews() error {
+	log.Printf("[AI BATCH] 开始批量分析未处理的新闻...")
+
+	// 查找没有AI分析结果的新闻
+	var newsWithoutAnalysis []models.News
+	subQuery := s.db.Table("ai_analyses").
+		Select("target_id").
+		Where("type = ? AND status = ?", models.AIAnalysisTypeNews, "completed")
+
+	err := s.db.Where("source_type = ? AND id NOT IN (?)", models.NewsTypeRSS, subQuery).
+		Order("created_at DESC").
+		Limit(50). // 每次处理50条，避免负载过高
+		Find(&newsWithoutAnalysis).Error
+
+	if err != nil {
+		log.Printf("[AI BATCH ERROR] 查询未分析新闻失败: %v", err)
+		return err
+	}
+
+	if len(newsWithoutAnalysis) == 0 {
+		log.Printf("[AI BATCH] 没有需要分析的新闻")
+		return nil
+	}
+
+	log.Printf("[AI BATCH] 找到 %d 条需要分析的新闻", len(newsWithoutAnalysis))
+
+	successCount := 0
+	for i, news := range newsWithoutAnalysis {
+		log.Printf("[AI BATCH] 分析新闻 %d/%d: %s", i+1, len(newsWithoutAnalysis), news.Title)
+
+		analysisReq := models.AIAnalysisRequest{
+			Type:     models.AIAnalysisTypeNews,
+			TargetID: news.ID,
+			Options: struct {
+				EnableSummary     bool `json:"enable_summary"`
+				EnableKeywords    bool `json:"enable_keywords"`
+				EnableSentiment   bool `json:"enable_sentiment"`
+				EnableTrends      bool `json:"enable_trends"`
+				EnableImpact      bool `json:"enable_impact"`
+				ShowAnalysisSteps bool `json:"show_analysis_steps"`
+			}{
+				EnableSummary:   true,
+				EnableKeywords:  true,
+				EnableSentiment: true,
+				EnableTrends:    false, // 批量处理时关闭趋势分析，提高速度
+				EnableImpact:    false, // 批量处理时关闭影响分析，提高速度
+			},
+		}
+
+		// 同步执行，避免并发过多
+		if _, err := s.AnalyzeNews(news.ID, analysisReq); err != nil {
+			log.Printf("[AI BATCH WARNING] 分析新闻 %d 失败: %v", news.ID, err)
+		} else {
+			successCount++
+			log.Printf("[AI BATCH] 成功分析新闻 %d", news.ID)
+		}
+
+		// 添加延迟避免API限制
+		time.Sleep(2 * time.Second)
+	}
+
+	log.Printf("[AI BATCH] 批量分析完成: 成功 %d/%d", successCount, len(newsWithoutAnalysis))
+	return nil
+}
+
+// AnalyzeNewsWithRetry 带重试机制的新闻AI分析
+func (s *AIService) AnalyzeNewsWithRetry(newsID uint, maxRetries int) {
+	analysisReq := models.AIAnalysisRequest{
+		Type:     models.AIAnalysisTypeNews,
+		TargetID: newsID,
+		Options: struct {
+			EnableSummary     bool `json:"enable_summary"`
+			EnableKeywords    bool `json:"enable_keywords"`
+			EnableSentiment   bool `json:"enable_sentiment"`
+			EnableTrends      bool `json:"enable_trends"`
+			EnableImpact      bool `json:"enable_impact"`
+			ShowAnalysisSteps bool `json:"show_analysis_steps"`
+		}{
+			EnableSummary:   true,
+			EnableKeywords:  true,
+			EnableSentiment: true,
+			EnableTrends:    false, // RSS实时分析时关闭趋势分析，提高速度
+			EnableImpact:    false, // RSS实时分析时关闭影响分析，提高速度
+		},
+	}
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		if _, err := s.AnalyzeNews(newsID, analysisReq); err != nil {
+			log.Printf("[AI WARNING] AI分析失败 (尝试 %d/%d): 新闻ID %d, 错误: %v", attempt, maxRetries, newsID, err)
+			if attempt < maxRetries {
+				// 等待后重试（指数退避）
+				waitTime := time.Duration(attempt) * 5 * time.Second
+				log.Printf("[AI DEBUG] 等待 %v 后重试AI分析...", waitTime)
+				time.Sleep(waitTime)
+			}
+		} else {
+			log.Printf("[AI DEBUG] AI分析成功: 新闻ID %d (尝试 %d/%d)", newsID, attempt, maxRetries)
+			return
+		}
+	}
+
+	log.Printf("[AI ERROR] AI分析最终失败: 新闻ID %d, 已重试 %d 次", newsID, maxRetries)
 }

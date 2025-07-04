@@ -123,7 +123,7 @@ func NewAIEventServiceWithConfig(config *AIEventConfig) *AIEventService {
 
 // DefaultAIEventConfig 获取默认AI事件配置
 func DefaultAIEventConfig() *AIEventConfig {
-	apiKey := "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"
+	apiKey := "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"
 	if apiKey == "" {
 		log.Println("警告：未设置 OPENAI_API_KEY 环境变量，AI功能将使用模拟模式")
 	}

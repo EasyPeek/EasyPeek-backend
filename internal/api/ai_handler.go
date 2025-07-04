@@ -316,3 +316,25 @@ func (h *AIHandler) SummarizeNews(c *gin.Context) {
 
 	utils.Success(c, gin.H{"summary": analysis.Summary})
 }
+
+// BatchAnalyzeUnprocessedNews 批量分析未处理的新闻
+// @Summary 批量分析未处理的新闻
+// @Description 批量分析数据库中未进行AI分析的新闻
+// @Tags AI
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/ai/batch-analyze-unprocessed [post]
+func (h *AIHandler) BatchAnalyzeUnprocessedNews(c *gin.Context) {
+	// 执行批量分析
+	err := h.aiService.BatchAnalyzeUnprocessedNews()
+	if err != nil {
+		utils.InternalServerError(c, "Failed to start batch analysis: "+err.Error())
+		return
+	}
+
+	utils.Success(c, map[string]interface{}{
+		"message": "Batch analysis started successfully",
+		"status":  "processing",
+	})
+}
