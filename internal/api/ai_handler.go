@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/EasyPeek/EasyPeek-backend/internal/config"
 	"github.com/EasyPeek/EasyPeek-backend/internal/database"
 	"github.com/EasyPeek/EasyPeek-backend/internal/models"
 	"github.com/EasyPeek/EasyPeek-backend/internal/services"
@@ -21,6 +22,14 @@ type AIHandler struct {
 func NewAIHandler(newsService *services.NewsService) *AIHandler {
 	return &AIHandler{
 		aiService:   services.NewAIService(database.GetDB()),
+		newsService: newsService,
+	}
+}
+
+// NewAIHandlerWithConfig 使用指定配置创建AI处理器实例
+func NewAIHandlerWithConfig(newsService *services.NewsService, cfg *config.Config) *AIHandler {
+	return &AIHandler{
+		aiService:   services.NewAIServiceWithConfig(database.GetDB(), cfg),
 		newsService: newsService,
 	}
 }
@@ -267,16 +276,18 @@ func (h *AIHandler) GetAnalysisStats(c *gin.Context) {
 // @Failure      500  {object}  utils.ErrorResponse
 // @Router       /news/{id}/summarize [post]
 func (h *AIHandler) SummarizeNews(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 64)
-	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "Invalid news ID", err.Error())
+	var req struct {
+		NewsID uint `json:"news_id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "请求参数无效", err.Error())
 		return
 	}
 
-	news, err := h.newsService.GetNewsByID(uint(id))
+	news, err := h.newsService.GetNewsByID(req.NewsID)
 	if err != nil {
-		utils.ErrorResponse(c, http.StatusNotFound, "News not found", err.Error())
+		utils.ErrorResponse(c, http.StatusNotFound, "新闻未找到", err.Error())
 		return
 	}
 
@@ -289,7 +300,7 @@ func (h *AIHandler) SummarizeNews(c *gin.Context) {
 
 	analysis, err := h.aiService.AnalyzeNews(news.ID, analysisReq)
 	if err != nil {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "Failed to generate summary", err.Error())
+		utils.ErrorResponse(c, http.StatusInternalServerError, "总结生成失败", err.Error())
 		return
 	}
 

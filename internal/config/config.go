@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -17,23 +16,23 @@ type Config struct {
 
 var AppConfig *Config
 
+// LoadConfig 加载并解析配置文件
 func LoadConfig(filepath string) (*Config, error) {
+	// 指定配置文件
 	viper.SetConfigFile(filepath)
-	viper.SetEnvPrefix("EasyPeek")
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	viper.AutomaticEnv()
 
+	// 从文件读取配置
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, err
 	}
 
+	// 解码到结构体
 	var cfg Config
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}
 
 	AppConfig = &cfg
-
 	return &cfg, nil
 }
 
@@ -48,11 +47,12 @@ type DatabaseConfig struct {
 	MaxOpenConns int    `mapstructure:"max_open_conns"`
 }
 
-// Data Source Name (DSN) for the database connection
-// Example: "host=localhost user=gorm password=gorm dbname=gorm port=5432 sslmode=disable TimeZone=Asia/Shanghai"
+// DSN 构造函数
 func (d DatabaseConfig) DSN() string {
-	return fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=%s TimeZone=Asia/Shanghai",
-		d.Host, d.User, d.Password, d.DBName, d.Port, d.SSLMode)
+	return fmt.Sprintf(
+		"host=%s user=%s password=%s dbname=%s port=%d sslmode=%s TimeZone=Asia/Shanghai",
+		d.Host, d.User, d.Password, d.DBName, d.Port, d.SSLMode,
+	)
 }
 
 type RedisConfig struct {
@@ -69,25 +69,24 @@ type JWTConfig struct {
 type CORSConfig struct {
 	AllowOrigins []string `mapstructure:"allow_origins"`
 }
+
 type AIConfig struct {
-	Provider    string  `mapstructure:"provider"`
-	APIKey      string  `mapstructure:"api_key"`
-	BaseURL     string  `mapstructure:"base_url"`
-	Model       string  `mapstructure:"model"`
-	Timeout     int     `mapstructure:"timeout"`
-	MaxTokens   int     `mapstructure:"max_tokens"`
-	Temperature float64 `mapstructure:"temperature"`
-	// OpenRouter特有配置
-	SiteURL  string `mapstructure:"site_url"`  // 你的网站URL
-	SiteName string `mapstructure:"site_name"` // 你的应用名称
-	// 自动分析配置
+	Provider     string             `mapstructure:"provider"`
+	APIKey       string             `mapstructure:"api_key"`
+	BaseURL      string             `mapstructure:"base_url"`
+	Model        string             `mapstructure:"model"`
+	Timeout      int                `mapstructure:"timeout"`
+	MaxTokens    int                `mapstructure:"max_tokens"`
+	Temperature  float64            `mapstructure:"temperature"`
+	SiteURL      string             `mapstructure:"site_url"`
+	SiteName     string             `mapstructure:"site_name"`
 	AutoAnalysis AutoAnalysisConfig `mapstructure:"auto_analysis"`
 }
 
 type AutoAnalysisConfig struct {
-	Enabled              bool `mapstructure:"enabled"`                // 是否启用自动AI分析
-	AnalyzeOnFetch       bool `mapstructure:"analyze_on_fetch"`       // 在RSS抓取时即时分析
-	BatchProcessInterval int  `mapstructure:"batch_process_interval"` // 批处理间隔（分钟）
-	MaxBatchSize         int  `mapstructure:"max_batch_size"`         // 每次批处理的最大数量
-	AnalysisDelay        int  `mapstructure:"analysis_delay"`         // 每个分析之间的延迟（秒）
+	Enabled              bool `mapstructure:"enabled"`
+	AnalyzeOnFetch       bool `mapstructure:"analyze_on_fetch"`
+	BatchProcessInterval int  `mapstructure:"batch_process_interval"`
+	MaxBatchSize         int  `mapstructure:"max_batch_size"`
+	AnalysisDelay        int  `mapstructure:"analysis_delay"`
 }

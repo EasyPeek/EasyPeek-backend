@@ -42,8 +42,16 @@ type AIService struct {
 
 // NewAIService 创建AI服务实例
 func NewAIService(db *gorm.DB) *AIService {
-	// 默认使用OpenAI兼容的API（如通义千问、文心一言等）
 	provider := NewOpenAICompatibleProvider()
+	return &AIService{
+		db:       db,
+		provider: provider,
+	}
+}
+
+// NewAIServiceWithConfig 使用指定配置创建AI服务实例
+func NewAIServiceWithConfig(db *gorm.DB, cfg *config.Config) *AIService {
+	provider := NewOpenAICompatibleProviderWithConfig(cfg)
 	return &AIService{
 		db:       db,
 		provider: provider,
@@ -472,6 +480,11 @@ func (s *AIService) buildEventContent(event models.Event, relatedNews []models.N
 	return content.String()
 }
 
+// GetProvider 获取AI提供商实例（用于测试）
+func (s *AIService) GetProvider() AIProvider {
+	return s.provider
+}
+
 // updateAnalysisStatus 更新分析状态
 func (s *AIService) updateAnalysisStatus(analysisID uint, status string, processingTime int) {
 	updates := map[string]interface{}{
@@ -485,32 +498,49 @@ func (s *AIService) updateAnalysisStatus(analysisID uint, status string, process
 
 // OpenAICompatibleProvider OpenAI兼容API提供商
 type OpenAICompatibleProvider struct {
-	apiKey   string
-	baseURL  string
-	model    string
-	siteURL  string
-	siteName string
+	apiKey      string
+	baseURL     string
+	model       string
+	siteURL     string
+	siteName    string
+	maxTokens   int
+	temperature float64
+	timeout     int
 }
 
-// NewOpenAICompatibleProvider 创建OpenAI兼容的提供商
+// NewOpenAICompatibleProvider 创建OpenAI兼容的提供商（使用全局配置）
 func NewOpenAICompatibleProvider() *OpenAICompatibleProvider {
-	// 从配置文件读取
-	cfg := config.AppConfig
+	return NewOpenAICompatibleProviderWithConfig(config.AppConfig)
+}
 
+// NewOpenAICompatibleProviderWithConfig 使用指定配置创建OpenAI兼容的提供商
+func NewOpenAICompatibleProviderWithConfig(cfg *config.Config) *OpenAICompatibleProvider {
 	// 默认配置 - 修改为OpenRouter的默认配置
 	provider := &OpenAICompatibleProvider{
-		apiKey:   "your-api-key",
-		baseURL:  "https://openrouter.ai/api/v1",
-		model:    "google/gemini-2.0-flash-001",
-		siteURL:  "http://localhost:5173/",
-		siteName: "EasyPeek",
+		apiKey:      "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",
+		baseURL:     "https://openrouter.ai/api/v1",
+		model:       "google/gemini-2.0-flash-001", // 使用稳定的thinking版本
+		siteURL:     "http://localhost:5173/",
+		siteName:    "EasyPeek",
+		maxTokens:   4000,
+		temperature: 0.7,
+		timeout:     30,
 	}
 
 	// 如果配置存在，则使用配置值
 	if cfg != nil {
-		// 直接使用配置文件中的API Key，不再处理环境变量引用
+		log.Printf("🔧 AI配置加载: Provider=%s, Model=%s", cfg.AI.Provider, cfg.AI.Model)
+		// 直接使用配置文件中的API Key
 		if cfg.AI.APIKey != "" {
 			provider.apiKey = cfg.AI.APIKey
+			// 安全地显示API Key前缀用于调试
+			keyPrefix := cfg.AI.APIKey
+			if len(keyPrefix) > 20 {
+				keyPrefix = keyPrefix[:20] + "..."
+			}
+			log.Printf("🔑 API Key已从配置文件加载: %s (长度: %d)", keyPrefix, len(cfg.AI.APIKey))
+		} else {
+			log.Printf("⚠️ 警告: 配置文件中API Key为空: %q", cfg.AI.APIKey)
 		}
 		if cfg.AI.BaseURL != "" {
 			provider.baseURL = cfg.AI.BaseURL
@@ -524,8 +554,20 @@ func NewOpenAICompatibleProvider() *OpenAICompatibleProvider {
 		if cfg.AI.SiteName != "" {
 			provider.siteName = cfg.AI.SiteName
 		}
+		if cfg.AI.MaxTokens > 0 {
+			provider.maxTokens = cfg.AI.MaxTokens
+		}
+		if cfg.AI.Temperature > 0 {
+			provider.temperature = cfg.AI.Temperature
+		}
+		if cfg.AI.Timeout > 0 {
+			provider.timeout = cfg.AI.Timeout
+		}
+	} else {
+		log.Printf("❌ 错误: 配置文件未加载")
 	}
 
+	log.Printf("✅ AI Provider初始化完成 - BaseURL: %s, Model: %s", provider.baseURL, provider.model)
 	return provider
 }
 
@@ -625,6 +667,17 @@ func (p *OpenAICompatibleProvider) AnalyzeEvent(content string, context string) 
 		return nil, err
 	}
 
+	// 清理响应，提取JSON部分
+	jsonStart := strings.Index(response, "{")
+	jsonEnd := strings.LastIndex(response, "}")
+
+	var jsonContent string
+	if jsonStart != -1 && jsonEnd != -1 && jsonEnd > jsonStart {
+		jsonContent = response[jsonStart : jsonEnd+1]
+	} else {
+		jsonContent = response
+	}
+
 	// 解析JSON响应
 	var result struct {
 		Analysis      string                `json:"analysis"`
@@ -635,7 +688,8 @@ func (p *OpenAICompatibleProvider) AnalyzeEvent(content string, context string) 
 		AnalysisSteps []models.AnalysisStep `json:"analysis_steps"`
 	}
 
-	if err := json.Unmarshal([]byte(response), &result); err != nil {
+	if err := json.Unmarshal([]byte(jsonContent), &result); err != nil {
+		log.Printf("⚠️ JSON解析失败: %v, 原始响应: %s", err, response)
 		// 如果JSON解析失败，返回默认值
 		return &EventAnalysisResult{
 			Analysis:      response,
@@ -702,8 +756,20 @@ func (p *OpenAICompatibleProvider) PredictTrends(content string, historicalData 
 		return nil, err
 	}
 
+	// 清理响应，提取JSON数组部分
+	jsonStart := strings.Index(response, "[")
+	jsonEnd := strings.LastIndex(response, "]")
+
+	var jsonContent string
+	if jsonStart != -1 && jsonEnd != -1 && jsonEnd > jsonStart {
+		jsonContent = response[jsonStart : jsonEnd+1]
+	} else {
+		jsonContent = response
+	}
+
 	var predictions []models.TrendPrediction
-	if err := json.Unmarshal([]byte(response), &predictions); err != nil {
+	if err := json.Unmarshal([]byte(jsonContent), &predictions); err != nil {
+		log.Printf("⚠️ 趋势预测JSON解析失败: %v, 原始响应: %s", err, response)
 		// 返回默认预测
 		return []models.TrendPrediction{
 			{
@@ -721,7 +787,7 @@ func (p *OpenAICompatibleProvider) PredictTrends(content string, historicalData 
 // callAPI 调用API
 func (p *OpenAICompatibleProvider) callAPI(prompt string) (string, error) {
 	log.Printf("🤖 AI API 调用开始 - 模型: %s, baseURL: %s", p.model, p.baseURL)
-	
+
 	requestBody := map[string]interface{}{
 		"model": p.model,
 		"messages": []map[string]string{
@@ -734,8 +800,8 @@ func (p *OpenAICompatibleProvider) callAPI(prompt string) (string, error) {
 				"content": prompt,
 			},
 		},
-		"temperature": 0.7,
-		"max_tokens":  2000,
+		"temperature": p.temperature,
+		"max_tokens":  p.maxTokens,
 	}
 
 	jsonData, err := json.Marshal(requestBody)
@@ -753,7 +819,17 @@ func (p *OpenAICompatibleProvider) callAPI(prompt string) (string, error) {
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+p.apiKey)
-	log.Printf("🔑 API Key (前10位): %s...", p.apiKey[:10])
+
+	// 安全地打印API Key的前几位
+	keyPreview := "未设置"
+	if len(p.apiKey) > 0 {
+		if len(p.apiKey) >= 10 {
+			keyPreview = p.apiKey[:10] + "..."
+		} else {
+			keyPreview = p.apiKey[:len(p.apiKey)] + "..."
+		}
+	}
+	log.Printf("🔑 API Key: %s", keyPreview)
 
 	// OpenRouter特有的请求头
 	if p.siteURL != "" {
@@ -765,11 +841,11 @@ func (p *OpenAICompatibleProvider) callAPI(prompt string) (string, error) {
 		log.Printf("📝 设置站点名称: %s", p.siteName)
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: time.Duration(p.timeout) * time.Second}
 	start := time.Now()
 	resp, err := client.Do(req)
 	duration := time.Since(start)
-	
+
 	if err != nil {
 		log.Printf("❌ HTTP请求失败 (耗时: %v): %v", duration, err)
 		return "", err
@@ -785,7 +861,7 @@ func (p *OpenAICompatibleProvider) callAPI(prompt string) (string, error) {
 	}
 
 	log.Printf("📄 响应体长度: %d 字节", len(body))
-	
+
 	// 如果状态码不是200，先打印响应体用于调试
 	if resp.StatusCode != 200 {
 		log.Printf("❌ HTTP错误 %d - 响应内容: %s", resp.StatusCode, string(body))

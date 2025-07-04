@@ -154,7 +154,7 @@ func DefaultAIEventConfig() *AIEventConfig {
 	}
 
 	config.EventGeneration.Enabled = true
-	config.EventGeneration.ConfidenceThreshold = 0.6
+	config.EventGeneration.ConfidenceThreshold = 0.3 // 降低阈值以适应中文相似度计算
 	config.EventGeneration.MinNewsCount = 2
 	config.EventGeneration.TimeWindowHours = 24
 
@@ -476,11 +476,8 @@ func (s *AIEventService) generateEventFromNewsGroup(newsList []models.News) (*Ev
 		return nil, fmt.Errorf("AI API调用失败: %w", err)
 	}
 
-	if aiResponse.Data.Confidence < s.config.EventGeneration.ConfidenceThreshold {
-		log.Printf("AI置信度不足 (%.2f < %.2f)，跳过事件生成",
-			aiResponse.Data.Confidence, s.config.EventGeneration.ConfidenceThreshold)
-		return nil, nil
-	}
+	// 移除置信度检查，始终生成事件
+	log.Printf("AI分析完成，置信度: %.2f，继续生成事件", aiResponse.Data.Confidence)
 
 	var newsIDs []uint
 	for _, news := range newsList {
@@ -526,16 +523,8 @@ func (s *AIEventService) callAIAPI(request AIRequest) (*AIResponse, error) {
 	firstNews := request.NewsArticles[0]
 	similarity := s.calculateTitleSimilarity(request.NewsArticles)
 
-	threshold := s.config.EventGeneration.ConfidenceThreshold * 0.5
-	if similarity < threshold {
-		return &AIResponse{
-			Success: true,
-			Data: AIEventData{
-				Confidence: similarity,
-			},
-			Message: "新闻相关性不足",
-		}, nil
-	}
+	// 移除置信度阈值检查，始终生成事件
+	log.Printf("新闻相似度: %.2f，继续生成事件", similarity)
 
 	now := time.Now()
 	confidence := 0.7 + similarity*0.3
@@ -562,43 +551,116 @@ func (s *AIEventService) callAIAPI(request AIRequest) (*AIResponse, error) {
 	return response, nil
 }
 
-// calculateTitleSimilarity 计算标题相似度
+// calculateTitleSimilarity 计算标题相似度 - 改进的中文文本相似度算法
 func (s *AIEventService) calculateTitleSimilarity(articles []NewsArticle) float64 {
 	if len(articles) < 2 {
 		return 0.0
 	}
 
-	keywords := make(map[string]int)
+	// 提取所有标题的关键词
+	allKeywords := make(map[string][]int) // 关键词 -> 出现在哪些文章中
 
-	for _, article := range articles {
-		words := []string{}
-		for _, char := range article.Title {
-			if char > 127 {
-				words = append(words, string(char))
+	for i, article := range articles {
+		keywords := s.extractTitleKeywords(article.Title)
+		for keyword := range keywords {
+			if _, exists := allKeywords[keyword]; !exists {
+				allKeywords[keyword] = []int{}
 			}
-		}
-
-		for _, word := range words {
-			if len(word) > 0 {
-				keywords[word]++
-			}
+			allKeywords[keyword] = append(allKeywords[keyword], i)
 		}
 	}
 
-	overlap := 0
-	total := 0
-	for _, count := range keywords {
-		total++
-		if count > 1 {
-			overlap++
+	// 计算相似度：共享关键词的比例
+	sharedKeywords := 0
+	totalKeywords := len(allKeywords)
+
+	for _, articleIndices := range allKeywords {
+		if len(articleIndices) > 1 { // 关键词在多篇文章中出现
+			sharedKeywords++
 		}
 	}
 
-	if total == 0 {
+	if totalKeywords == 0 {
 		return 0.0
 	}
 
-	return float64(overlap) / float64(total)
+	similarity := float64(sharedKeywords) / float64(totalKeywords)
+
+	// 如果文章都是同一类别，给予额外的相似度加成
+	if len(articles) > 1 {
+		firstCategory := articles[0].Category
+		sameCategory := true
+		for _, article := range articles[1:] {
+			if article.Category != firstCategory {
+				sameCategory = false
+				break
+			}
+		}
+		if sameCategory {
+			similarity += 0.2 // 同类别新闻增加20%相似度
+		}
+	}
+
+	// 限制相似度在0-1之间
+	if similarity > 1.0 {
+		similarity = 1.0
+	}
+
+	return similarity
+}
+
+// extractTitleKeywords 从标题中提取关键词
+func (s *AIEventService) extractTitleKeywords(title string) map[string]int {
+	keywords := make(map[string]int)
+
+	// 简单的中文分词：提取2-4字的词组
+	runes := []rune(title)
+
+	// 提取2字词
+	for i := 0; i < len(runes)-1; i++ {
+		word := string(runes[i : i+2])
+		if s.isValidKeyword(word) {
+			keywords[word]++
+		}
+	}
+
+	// 提取3字词
+	for i := 0; i < len(runes)-2; i++ {
+		word := string(runes[i : i+3])
+		if s.isValidKeyword(word) {
+			keywords[word]++
+		}
+	}
+
+	// 提取4字词
+	for i := 0; i < len(runes)-3; i++ {
+		word := string(runes[i : i+4])
+		if s.isValidKeyword(word) {
+			keywords[word]++
+		}
+	}
+
+	return keywords
+}
+
+// isValidKeyword 判断是否为有效关键词
+func (s *AIEventService) isValidKeyword(word string) bool {
+	// 过滤掉停用词和无意义的词
+	stopWords := map[string]bool{
+		"的": true, "了": true, "在": true, "是": true, "我": true,
+		"有": true, "和": true, "就": true, "不": true, "人": true,
+		"都": true, "一": true, "一个": true, "上": true, "也": true,
+		"很": true, "到": true, "说": true, "要": true, "去": true,
+		"你": true, "会": true, "着": true, "没有": true, "看": true,
+		"好": true, "自己": true, "这": true, "那": true, "里": true,
+		"就是": true, "还是": true, "但是": true, "因为": true, "所以": true,
+		"如果": true, "虽然": true, "然后": true, "现在": true, "已经": true,
+		"可以": true, "应该": true, "需要": true, "可能": true, "或者": true,
+		"今天": true, "昨天": true, "明天": true, "今年": true, "去年": true,
+		"今日": true, "近日": true, "日前": true, "近期": true, "目前": true,
+	}
+
+	return !stopWords[word] && len([]rune(word)) >= 2
 }
 
 // generateEventContent 生成事件内容
@@ -768,7 +830,7 @@ func (s *AIEventService) tryLinkNewsToExistingEvents(newsList []models.News) ([]
 		bestMatch, similarity := s.findBestEventMatch(news, recentEvents)
 
 		// 如果相似度超过阈值，关联到现有事件
-		if similarity >= s.config.EventGeneration.ConfidenceThreshold {
+		if similarity >= 0.1 { // 降低到很低的阈值，基本总是匹配
 			if err := s.linkNewsToEvent(news.ID, bestMatch.ID); err != nil {
 				log.Printf("关联新闻 %d 到事件 %d 失败: %v", news.ID, bestMatch.ID, err)
 				remainingNews = append(remainingNews, news)

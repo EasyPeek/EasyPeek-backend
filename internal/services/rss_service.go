@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/EasyPeek/EasyPeek-backend/internal/config"
 	"github.com/EasyPeek/EasyPeek-backend/internal/database"
 	"github.com/EasyPeek/EasyPeek-backend/internal/models"
 	"github.com/EasyPeek/EasyPeek-backend/internal/utils"
@@ -15,14 +16,16 @@ import (
 )
 
 type RSSService struct {
-	db     *gorm.DB
-	parser *gofeed.Parser
+	db        *gorm.DB
+	parser    *gofeed.Parser
+	aiService *AIService
 }
 
 func NewRSSService() *RSSService {
 	return &RSSService{
-		db:     database.GetDB(),
-		parser: gofeed.NewParser(),
+		db:        database.GetDB(),
+		parser:    gofeed.NewParser(),
+		aiService: NewAIService(database.GetDB()),
 	}
 }
 
@@ -198,7 +201,7 @@ func (s *RSSService) DeleteRSSSource(id uint) error {
 // FetchRSSFeed 抓取单个RSS源的内容
 func (s *RSSService) FetchRSSFeed(sourceID uint) (*models.RSSFetchStats, error) {
 	log.Printf("[RSS DEBUG] Starting to fetch RSS feed for source ID: %d", sourceID)
-	
+
 	var source models.RSSSource
 	if err := s.db.First(&source, sourceID).Error; err != nil {
 		log.Printf("[RSS ERROR] Failed to find RSS source %d: %v", sourceID, err)
@@ -248,9 +251,31 @@ func (s *RSSService) FetchRSSFeed(sourceID uint) (*models.RSSFetchStats, error) 
 			stats.UpdatedItems++
 		}
 
-		// 自动计算热度
+		// 自动计算热度和AI分析
 		if newsItem != nil {
 			s.calculateNewsHotness(newsItem.ID)
+			// 异步进行AI分析
+			go func(id uint) {
+				analysisReq := models.AIAnalysisRequest{
+					Type:     models.AIAnalysisTypeNews,
+					TargetID: id,
+					Options: struct {
+						EnableSummary     bool `json:"enable_summary"`
+						EnableKeywords    bool `json:"enable_keywords"`
+						EnableSentiment   bool `json:"enable_sentiment"`
+						EnableTrends      bool `json:"enable_trends"`
+						EnableImpact      bool `json:"enable_impact"`
+						ShowAnalysisSteps bool `json:"show_analysis_steps"`
+					}{
+						EnableSummary:   true,
+						EnableKeywords:  true,
+						EnableSentiment: true,
+					},
+				}
+				if _, err := s.aiService.AnalyzeNews(id, analysisReq); err != nil {
+					log.Printf("[RSS WARNING] Failed to analyze news item %d: %v", id, err)
+				}
+			}(newsItem.ID)
 		}
 	}
 
@@ -309,7 +334,7 @@ func (s *RSSService) FetchAllRSSFeeds() (*models.RSSFetchResult, error) {
 // processNewsItem 处理单个新闻条目
 func (s *RSSService) processNewsItem(source *models.RSSSource, item *gofeed.Item) (*models.News, bool, error) {
 	log.Printf("[RSS DEBUG] Processing news item: %s", item.Title)
-	
+
 	// 检查是否已存在
 	var existingItem models.News
 	isNew := false
@@ -411,6 +436,44 @@ func (s *RSSService) processNewsItem(source *models.RSSSource, item *gofeed.Item
 			return nil, false, err
 		}
 		log.Printf("[RSS DEBUG] Successfully updated news item ID: %d", newsItem.ID)
+	}
+
+	// 检查是否启用自动AI分析
+	// 从配置中获取AI分析设置
+	cfg := &config.Config{
+		AI: config.AIConfig{
+			AutoAnalysis: config.AutoAnalysisConfig{
+				Enabled:        true,
+				AnalyzeOnFetch: true,
+			},
+		},
+	}
+	if cfg.AI.AutoAnalysis.Enabled && cfg.AI.AutoAnalysis.AnalyzeOnFetch {
+		log.Printf("[RSS DEBUG] Auto AI analysis enabled, analyzing news item ID: %d", newsItem.ID)
+		// 异步进行AI分析
+		go func(id uint) {
+			analysisReq := models.AIAnalysisRequest{
+				Type:     models.AIAnalysisTypeNews,
+				TargetID: id,
+				Options: struct {
+					EnableSummary     bool `json:"enable_summary"`
+					EnableKeywords    bool `json:"enable_keywords"`
+					EnableSentiment   bool `json:"enable_sentiment"`
+					EnableTrends      bool `json:"enable_trends"`
+					EnableImpact      bool `json:"enable_impact"`
+					ShowAnalysisSteps bool `json:"show_analysis_steps"`
+				}{
+					EnableSummary:   true,
+					EnableKeywords:  true,
+					EnableSentiment: true,
+				},
+			}
+			if _, err := s.aiService.AnalyzeNews(id, analysisReq); err != nil {
+				log.Printf("[RSS WARNING] Failed to analyze news item %d: %v", id, err)
+			} else {
+				log.Printf("[RSS DEBUG] Successfully analyzed news item %d", id)
+			}
+		}(newsItem.ID)
 	}
 
 	return &newsItem, isNew, nil

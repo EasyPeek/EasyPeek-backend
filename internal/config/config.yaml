@@ -32,25 +32,26 @@ admin:
 # AI服务配置
 ai:
   provider: "openrouter"
-  api_key: "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"
+  api_key: "" # 推荐留空，实际运行时用环境变量注入 EASYPEEK_AI_API_KEY
   base_url: "https://openrouter.ai/api/v1"
-  model: "google/gemini-2.0-flash-exp:free" 
+  model: "google/gemini-2.0-flash-001" # 使用更稳定的thinking版本
   timeout: 30 
-  max_tokens: 2000
+  max_tokens: 4000 # 增加token限制以获得更完整的响应
   temperature: 0.7
-  site_url: "http://localhost:5173/" # 你的网站URL（可选）
-  site_name: "EasyPeek" 
+  # OpenRouter特有配置
+  site_url: "http://localhost:5173/" # 你的网站URL（OpenRouter需要）
+  site_name: "EasyPeek" # 你的应用名称（OpenRouter需要）
   # 自动分析配置
   auto_analysis:
     enabled: true # 是否启用自动AI分析
     analyze_on_fetch: true # 在RSS抓取时即时分析
-    batch_process_interval: 10 # 批处理未分析新闻的间隔（分钟）
-    max_batch_size: 10 # 每次批处理的最大新闻数量
-    analysis_delay: 2 # 每个分析之间的延迟（秒）
+    batch_process_interval: 15 # 批处理未分析新闻的间隔（分钟）- 增加间隔避免速率限制
+    max_batch_size: 5 # 每次批处理的最大新闻数量 - 减少数量避免速率限制
+    analysis_delay: 3 # 每个分析之间的延迟（秒）- 增加延迟避免速率限制
 
-# OpenRouter配置（备用配置，与ai配置保持一致）
-open_router:
-  api_key: "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"
-  api_host: "https://openrouter.ai/api/v1"
-  model: "google/gemini-2.0-flash-exp:free"
+# 注意：为避免速率限制，请确保：
+# 1. API Key有效且账户余额充足
+# 2. 请求间隔合理（已设置3秒延迟）
+# 3. 批处理大小不超过5个新闻项
+# 4. 监控API使用情况以避免超出限制
 
