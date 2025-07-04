@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"errors"
+
 	"github.com/EasyPeek/EasyPeek-backend/internal/database"
 	"github.com/EasyPeek/EasyPeek-backend/internal/models"
 	"github.com/EasyPeek/EasyPeek-backend/internal/utils"
@@ -20,7 +21,7 @@ const (
 
 const userContextKey = "user"
 
-// AuthMiddleware 基础认证中间件，验证JWT
+// AuthMiddleware 基础认证中间件
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -37,7 +38,6 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// 将基础信息存储到context中
 		c.Set("user_id", claims.UserID)
 		c.Set("username", claims.Username)
 		c.Set("role", claims.Role)

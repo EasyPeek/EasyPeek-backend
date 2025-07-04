@@ -37,6 +37,7 @@ func SetupRoutes() *gin.Engine {
 		{
 			auth.POST("/register", userHandler.Register)
 			auth.POST("/login", userHandler.Login)
+			auth.POST("/logout", userHandler.Logout)
 
 			auth.POST("/admin-login", adminHandler.AdminLogin) // 管理员登录
 			// auth.POST("/refresh", userHandler.RefreshToken)  // TODO: 实现token刷新
@@ -47,10 +48,10 @@ func SetupRoutes() *gin.Engine {
 		user := v1.Group("/user")
 		user.Use(middleware.AuthMiddleware())
 		{
+
 			user.GET("/profile", userHandler.GetProfile)
 			user.PUT("/profile", userHandler.UpdateProfile)
 			user.POST("/change-password", userHandler.ChangePassword)
-			// 用户自删除账户
 			user.DELETE("/me", userHandler.DeleteSelf)
 		}
 
@@ -183,8 +184,8 @@ func SetupRoutes() *gin.Engine {
 			// 用户管理
 			users := admin.Group("/users")
 			{
-				users.GET("", adminHandler.GetAllUsers)          // 获取所有用户（带过滤）
-				users.GET("/active", userHandler.GetActiveUsers) // 获取活跃用户（保持兼容）
+				users.GET("", adminHandler.GetAllUsers) // 获取所有用户（带过滤）
+				// users.GET("/active", userHandler.GetActiveUsers) // 获取活跃用户（保持兼容）
 
 				users.GET("/:id", adminHandler.GetUserByID)   // get user by ID
 				users.PUT("/:id", adminHandler.UpdateUser)    // 更新用户信息

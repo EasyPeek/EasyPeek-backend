@@ -50,7 +50,7 @@ func (s *AdminService) AdminLogin(req *models.LoginRequest) (*models.User, strin
 }
 
 // User management
-// GetAllUsers 获取所有用户（包括已删除的）
+// GetAllUsers
 func (s *AdminService) GetAllUsers(page, pageSize int, filter AdminUserFilter) ([]models.User, int64, error) {
 	if s.db == nil {
 		return nil, 0, errors.New("database connection not initialized")
@@ -193,7 +193,7 @@ func (s *AdminService) UpdateUserInfo(userID uint, updateData AdminUserUpdateReq
 	return nil
 }
 
-// DeleteUser 硬删除用户
+// delete user
 func (s *AdminService) DeleteUser(userID uint) error {
 	if s.db == nil {
 		return errors.New("database connection not initialized")
