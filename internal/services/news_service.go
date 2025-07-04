@@ -430,3 +430,95 @@ func (s *NewsService) GetNewsByCategoryLatest(category string, limit int) ([]mod
 
 	return newsList, nil
 }
+
+// LikeNews 点赞新闻
+func (s *NewsService) LikeNews(newsID uint, userID uint) error {
+	if s.db == nil {
+		return errors.New("database connection not initialized")
+	}
+
+	// 检查新闻是否存在
+	var news models.News
+	if err := s.db.First(&news, newsID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("news not found")
+		}
+		return fmt.Errorf("failed to find news: %w", err)
+	}
+
+	// 检查用户是否已经点赞过该新闻
+	var existingLike models.NewsLike
+	err := s.db.Where("news_id = ? AND user_id = ?", newsID, userID).First(&existingLike).Error
+
+	if err == nil {
+		// 已经点赞过，取消点赞
+		if err := s.db.Delete(&existingLike).Error; err != nil {
+			return fmt.Errorf("failed to unlike news: %w", err)
+		}
+
+		// 减少点赞数
+		if err := s.db.Model(&news).UpdateColumn("like_count", gorm.Expr("like_count - 1")).Error; err != nil {
+			return fmt.Errorf("failed to decrease like count: %w", err)
+		}
+
+		return nil
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("failed to check existing like: %w", err)
+	}
+
+	// 没有点赞过，添加点赞记录
+	newLike := models.NewsLike{
+		NewsID: newsID,
+		UserID: userID,
+		LikeAt: time.Now(),
+	}
+
+	if err := s.db.Create(&newLike).Error; err != nil {
+		return fmt.Errorf("failed to create like record: %w", err)
+	}
+
+	// 增加点赞数
+	if err := s.db.Model(&news).UpdateColumn("like_count", gorm.Expr("like_count + 1")).Error; err != nil {
+		return fmt.Errorf("failed to increase like count: %w", err)
+	}
+
+	return nil
+}
+
+// CheckUserLikedNews 检查用户是否已点赞该新闻
+func (s *NewsService) CheckUserLikedNews(newsID uint, userID uint) (bool, error) {
+	if s.db == nil {
+		return false, errors.New("database connection not initialized")
+	}
+
+	var like models.NewsLike
+	err := s.db.Where("news_id = ? AND user_id = ?", newsID, userID).First(&like).Error
+
+	if err == nil {
+		return true, nil
+	} else if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+
+	return false, fmt.Errorf("failed to check user like status: %w", err)
+}
+
+// IncrementViewCount 增加新闻浏览量
+func (s *NewsService) IncrementViewCount(newsID uint) error {
+	if s.db == nil {
+		return errors.New("database connection not initialized")
+	}
+
+	// 检查新闻是否存在并增加浏览量
+	result := s.db.Model(&models.News{}).Where("id = ?", newsID).UpdateColumn("view_count", gorm.Expr("view_count + 1"))
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to increment view count: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.New("news not found")
+	}
+
+	return nil
+}
