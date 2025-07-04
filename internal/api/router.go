@@ -185,10 +185,10 @@ func SetupRoutes() *gin.Engine {
 			{
 				users.GET("", adminHandler.GetAllUsers)          // 获取所有用户（带过滤）
 				users.GET("/active", userHandler.GetActiveUsers) // 获取活跃用户（保持兼容）
-				users.GET("/:id", adminHandler.GetUserByID)      // 获取指定用户
 
+				users.GET("/:id", adminHandler.GetUserByID)   // get user by ID
 				users.PUT("/:id", adminHandler.UpdateUser)    // 更新用户信息
-				users.DELETE("/:id", adminHandler.DeleteUser) // 管理员删除用户（硬删除）
+				users.DELETE("/:id", adminHandler.DeleteUser) // delete user
 				// 保留原有的单独角色和状态更新接口
 				// users.PUT("/:id/role", userHandler.UpdateUserRole)     // 更新用户角色
 				// users.PUT("/:id/status", userHandler.UpdateUserStatus) // 更新用户状态

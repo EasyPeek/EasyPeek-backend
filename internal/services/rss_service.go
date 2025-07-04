@@ -25,10 +25,6 @@ type RSSService struct {
 }
 
 func NewRSSService() *RSSService {
-	// 初始化随机数种子
-	rand.Seed(time.Now().UnixNano())
-
-	// 创建带有自定义HTTP客户端的解析器
 	parser := gofeed.NewParser()
 
 	// 设置自定义HTTP客户端，添加超时和User-Agent
@@ -109,7 +105,7 @@ type RSSSourceListResponse struct {
 
 // NewsListResponse 新闻列表响应结构
 type NewsListResponse struct {
-	Total int64                  `json:"total"`
+	Total int64                 `json:"total"`
 	News  []models.NewsResponse `json:"news"`
 }
 
@@ -952,16 +948,16 @@ func (s *RSSService) convertToRSSSourceResponse(source *models.RSSSource) *model
 // GetRSSCategories 获取所有RSS源分类
 func (s *RSSService) GetRSSCategories() ([]string, error) {
 	var categories []string
-	
+
 	err := s.db.Model(&models.RSSSource{}).
 		Distinct("category").
 		Where("category != ''").
 		Pluck("category", &categories).Error
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return categories, nil
 }
 
@@ -978,25 +974,25 @@ type RSSStats struct {
 // GetRSSStats 获取RSS统计信息
 func (s *RSSService) GetRSSStats() (*RSSStats, error) {
 	stats := &RSSStats{}
-	
+
 	// 总RSS源数
 	if err := s.db.Model(&models.RSSSource{}).Count(&stats.TotalSources).Error; err != nil {
 		return nil, err
 	}
-	
+
 	// 活跃RSS源数
 	if err := s.db.Model(&models.RSSSource{}).Where("is_active = ?", true).Count(&stats.ActiveSources).Error; err != nil {
 		return nil, err
 	}
-	
+
 	// 非活跃RSS源数
 	stats.InactiveSources = stats.TotalSources - stats.ActiveSources
-	
+
 	// 总新闻数（来自RSS）
 	if err := s.db.Model(&models.News{}).Where("source_type = ?", models.NewsTypeRSS).Count(&stats.TotalNews).Error; err != nil {
 		return nil, err
 	}
-	
+
 	// 今日新闻数
 	today := time.Now().Truncate(24 * time.Hour)
 	if err := s.db.Model(&models.News{}).
@@ -1004,7 +1000,7 @@ func (s *RSSService) GetRSSStats() (*RSSStats, error) {
 		Count(&stats.TodayNews).Error; err != nil {
 		return nil, err
 	}
-	
+
 	// 分类数
 	if err := s.db.Model(&models.RSSSource{}).
 		Distinct("category").
@@ -1012,7 +1008,7 @@ func (s *RSSService) GetRSSStats() (*RSSStats, error) {
 		Count(&stats.Categories).Error; err != nil {
 		return nil, err
 	}
-	
+
 	return stats, nil
 }
 
