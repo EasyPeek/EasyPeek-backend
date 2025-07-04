@@ -69,6 +69,86 @@ func (s *CommentService) CreateComment(req *models.CommentCreateRequest, userID 
 	return comment, nil
 }
 
+// ReplyToComment 回复评论
+func (s *CommentService) ReplyToComment(req *models.CommentReplyRequest, userID uint) (*models.Comment, error) {
+	// 检查数据库连接是否已初始化
+	if s.db == nil {
+		return nil, errors.New("database connection not initialized")
+	}
+
+	// 验证新闻是否存在
+	var news models.News
+	if err := s.db.First(&news, req.NewsID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("news not found")
+		}
+		return nil, fmt.Errorf("failed to check news existence: %w", err)
+	}
+
+	// 验证用户是否存在
+	var user models.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("user not found")
+		}
+		return nil, fmt.Errorf("failed to check user existence: %w", err)
+	}
+
+	// 验证父评论是否存在
+	var parentComment models.Comment
+	if err := s.db.First(&parentComment, req.ParentID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("parent comment not found")
+		}
+		return nil, fmt.Errorf("failed to check parent comment existence: %w", err)
+	}
+
+	// 验证父评论是否属于同一个新闻
+	if parentComment.NewsID != req.NewsID {
+		return nil, errors.New("parent comment does not belong to the same news")
+	}
+
+	// 构造回复评论实例
+	reply := &models.Comment{
+		NewsID:    req.NewsID,
+		UserID:    &userID,
+		ParentID:  &req.ParentID,
+		Content:   req.Content,
+		CreatedAt: time.Now(),
+	}
+
+	// 将回复保存到数据库
+	if err := s.db.Create(reply).Error; err != nil {
+		return nil, fmt.Errorf("failed to create reply: %w", err)
+	}
+
+	// 更新新闻的评论数
+	if err := s.db.Model(&news).Update("comment_count", gorm.Expr("comment_count + ?", 1)).Error; err != nil {
+		// 这里只是记录错误，不影响回复创建的成功
+		fmt.Printf("failed to update news comment count: %v\n", err)
+	}
+
+	// 创建回复消息通知（仅当父评论有作者且不是自己回复自己时）
+	if parentComment.UserID != nil && *parentComment.UserID != userID {
+		messageService := NewMessageService()
+		title := "您的评论收到了回复"
+		content := fmt.Sprintf("用户「%s」回复了您的评论「%s」", user.Username, parentComment.Content)
+
+		// 创建回复消息（忽略错误，不影响回复操作）
+		_ = messageService.CreateMessage(
+			*parentComment.UserID, // 父评论作者ID
+			"comment",
+			title,
+			content,
+			"comment",
+			reply.ID,
+			&userID, // 回复者ID
+		)
+	}
+
+	return reply, nil
+}
+
 // CreateAnonymousComment 创建匿名评论
 func (s *CommentService) CreateAnonymousComment(req *models.CommentAnonymousCreateRequest) (*models.Comment, error) {
 	// 检查数据库连接是否已初始化
@@ -135,7 +215,7 @@ func (s *CommentService) GetCommentsByNewsID(newsID uint, page, pageSize int) ([
 	var comments []models.Comment
 	var total int64
 
-	// 计算总记录数
+	// 计算总记录数（包括所有评论和回复）
 	if err := s.db.Model(&models.Comment{}).Where("news_id = ?", newsID).Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("failed to count total comments: %w", err)
 	}
@@ -149,8 +229,11 @@ func (s *CommentService) GetCommentsByNewsID(newsID uint, page, pageSize int) ([
 		pageSize = 10 // 默认值
 	}
 
-	// 查询带分页的评论数据，按创建时间倒序排列
-	if err := s.db.Where("news_id = ?", newsID).
+	// 查询带分页的评论数据，按创建时间倒序排列，只获取顶级评论（没有父评论的）
+	if err := s.db.Where("news_id = ? AND parent_id IS NULL", newsID).
+		Preload("Replies", func(db *gorm.DB) *gorm.DB {
+			return db.Order("created_at ASC") // 回复按时间正序排列
+		}).Preload("Replies.User").Preload("User").
 		Order("created_at desc").
 		Offset(offset).Limit(pageSize).
 		Find(&comments).Error; err != nil {
@@ -233,11 +316,19 @@ func (s *CommentService) DeleteComment(commentID uint, userID uint) error {
 		return errors.New("comment not found or already deleted")
 	}
 
-	// 更新新闻的评论数
+	// 更新新闻的评论数（包括回复）
 	if err := s.db.Model(&models.News{}).Where("id = ?", comment.NewsID).
 		Update("comment_count", gorm.Expr("comment_count - ?", 1)).Error; err != nil {
 		// 这里只是记录错误，不影响评论删除的成功
 		fmt.Printf("failed to update news comment count: %v\n", err)
+	}
+
+	// 如果是顶级评论，还需要删除其下的所有回复
+	if comment.ParentID == nil {
+		// 删除所有回复
+		if err := s.db.Where("parent_id = ?", comment.ID).Delete(&models.Comment{}).Error; err != nil {
+			fmt.Printf("failed to delete replies: %v\n", err)
+		}
 	}
 
 	return nil
