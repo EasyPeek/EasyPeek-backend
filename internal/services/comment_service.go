@@ -195,8 +195,8 @@ func (s *CommentService) GetCommentByID(id uint) (*models.Comment, error) {
 	}
 
 	var comment models.Comment
-	// 使用 First 方法根据主键ID查找评论
-	if err := s.db.First(&comment, id).Error; err != nil {
+	// 使用 First 方法根据主键ID查找评论，并预加载用户信息
+	if err := s.db.Preload("User").First(&comment, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("comment not found") // 如果记录未找到
 		}
@@ -215,8 +215,8 @@ func (s *CommentService) GetCommentsByNewsID(newsID uint, page, pageSize int) ([
 	var comments []models.Comment
 	var total int64
 
-	// 计算总记录数（包括所有评论和回复）
-	if err := s.db.Model(&models.Comment{}).Where("news_id = ?", newsID).Count(&total).Error; err != nil {
+	// 计算总记录数（只统计顶级评论，不包括回复）
+	if err := s.db.Model(&models.Comment{}).Where("news_id = ? AND parent_id IS NULL", newsID).Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("failed to count total comments: %w", err)
 	}
 
@@ -273,6 +273,7 @@ func (s *CommentService) GetCommentsByUserID(userID uint, page, pageSize int) ([
 
 	// 查询带分页的评论数据，按创建时间倒序排列
 	if err := s.db.Where("user_id = ?", userID).
+		Preload("User").
 		Order("created_at desc").
 		Offset(offset).Limit(pageSize).
 		Find(&comments).Error; err != nil {
@@ -365,7 +366,8 @@ func (s *CommentService) GetAllComments(page, pageSize int) ([]models.Comment, i
 	}
 
 	// 查询带分页的评论数据
-	if err := s.db.Offset(offset).Limit(pageSize).Find(&comments).Error; err != nil {
+	if err := s.db.Preload("User").
+		Offset(offset).Limit(pageSize).Find(&comments).Error; err != nil {
 		return nil, 0, fmt.Errorf("failed to get all comments with pagination: %w", err)
 	}
 

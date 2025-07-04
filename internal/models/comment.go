@@ -29,6 +29,7 @@ type CommentResponse struct {
 	ID          uint              `json:"id"`
 	NewsID      uint              `json:"news_id"`
 	UserID      *uint             `json:"user_id"`   // 可为空，表示匿名用户
+	Username    *string           `json:"username"`  // 用户名，可为空（匿名评论）
 	ParentID    *uint             `json:"parent_id"` // 父评论ID
 	Content     string            `json:"content"`
 	LikeCount   int               `json:"like_count"`
@@ -79,6 +80,11 @@ func (c *Comment) ToResponse() CommentResponse {
 		IsAnonymous: c.UserID == nil,     // 如果UserID为空，则为匿名评论
 		IsReply:     c.ParentID != nil,   // 如果有父评论ID，则为回复
 		Replies:     []CommentResponse{}, // 初始化回复列表
+	}
+
+	// 如果有用户信息，添加用户名
+	if c.User != nil {
+		response.Username = &c.User.Username
 	}
 
 	// 如果有回复，转换为响应格式
