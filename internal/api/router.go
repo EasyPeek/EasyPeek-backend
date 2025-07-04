@@ -109,9 +109,11 @@ func SetupRoutes() *gin.Engine {
 		{
 			// 公开路由
 			comments.GET("/:id", commentHandler.GetCommentByID)                // 根据ID获取单条评论
-			comments.GET("/news/:news_id", commentHandler.GetCommentsByNewsID) // 根据新闻ID获取评论列表
-			comments.GET("/user/:user_id", commentHandler.GetCommentsByUserID) // 根据用户ID获取评论列表
 			comments.POST("/anonymous", commentHandler.CreateAnonymousComment) // 创建匿名评论
+
+			// 支持可选认证的路由（已登录用户可以获取个人点赞状态）
+			comments.GET("/news/:news_id", middleware.OptionalAuthMiddleware(), commentHandler.GetCommentsByNewsID) // 根据新闻ID获取评论列表
+			comments.GET("/user/:user_id", middleware.OptionalAuthMiddleware(), commentHandler.GetCommentsByUserID) // 根据用户ID获取评论列表
 
 			// 需要身份验证的路由
 			authComments := comments.Group("")

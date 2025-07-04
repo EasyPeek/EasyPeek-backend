@@ -6,6 +6,19 @@ import (
 	"gorm.io/gorm"
 )
 
+// CommentLike 评论点赞记录表
+type CommentLike struct {
+	ID        uint           `json:"id" gorm:"primaryKey"`
+	CommentID uint           `json:"comment_id" gorm:"not null;index"` // 评论ID
+	UserID    uint           `json:"user_id" gorm:"not null;index"`    // 点赞用户ID
+	CreatedAt time.Time      `json:"created_at"`                       // 点赞时间
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`                   // 软删除
+
+	// GORM 关系定义
+	Comment *Comment `json:"comment,omitempty" gorm:"foreignKey:CommentID;references:ID"`
+	User    *User    `json:"user,omitempty" gorm:"foreignKey:UserID;references:ID"`
+}
+
 // Comment 对应数据库中的 'comments' 表
 type Comment struct {
 	ID        uint           `json:"id" gorm:"primaryKey"`
@@ -18,10 +31,11 @@ type Comment struct {
 	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`                    // 软删除
 
 	// GORM 关系定义
-	News    *News     `json:"news,omitempty" gorm:"foreignKey:NewsID;references:ID"`
-	User    *User     `json:"user,omitempty" gorm:"foreignKey:UserID;references:ID"`
-	Parent  *Comment  `json:"parent,omitempty" gorm:"foreignKey:ParentID;references:ID"`
-	Replies []Comment `json:"replies,omitempty" gorm:"foreignKey:ParentID"`
+	News    *News         `json:"news,omitempty" gorm:"foreignKey:NewsID;references:ID"`
+	User    *User         `json:"user,omitempty" gorm:"foreignKey:UserID;references:ID"`
+	Parent  *Comment      `json:"parent,omitempty" gorm:"foreignKey:ParentID;references:ID"`
+	Replies []Comment     `json:"replies,omitempty" gorm:"foreignKey:ParentID"`
+	Likes   []CommentLike `json:"likes,omitempty" gorm:"foreignKey:CommentID"` // 点赞记录
 }
 
 // CommentResponse 用于向前端返回评论信息时，过滤掉敏感或不需要的字段
@@ -33,6 +47,7 @@ type CommentResponse struct {
 	ParentID    *uint             `json:"parent_id"` // 父评论ID
 	Content     string            `json:"content"`
 	LikeCount   int               `json:"like_count"`
+	IsLiked     bool              `json:"is_liked"` // 当前用户是否已点赞
 	CreatedAt   time.Time         `json:"created_at"`
 	IsAnonymous bool              `json:"is_anonymous"`      // 是否为匿名评论
 	IsReply     bool              `json:"is_reply"`          // 是否为回复
@@ -68,7 +83,7 @@ type CommentReplyRequest struct {
 	Content  string `json:"content" binding:"required,min=1,max=1000"` // 回复内容必填，限制长度
 }
 
-func (c *Comment) ToResponse() CommentResponse {
+func (c *Comment) ToResponse(currentUserID *uint) CommentResponse {
 	response := CommentResponse{
 		ID:          c.ID,
 		NewsID:      c.NewsID,
@@ -80,6 +95,7 @@ func (c *Comment) ToResponse() CommentResponse {
 		IsAnonymous: c.UserID == nil,     // 如果UserID为空，则为匿名评论
 		IsReply:     c.ParentID != nil,   // 如果有父评论ID，则为回复
 		Replies:     []CommentResponse{}, // 初始化回复列表
+		IsLiked:     false,               // 默认未点赞
 	}
 
 	// 如果有用户信息，添加用户名
@@ -87,10 +103,20 @@ func (c *Comment) ToResponse() CommentResponse {
 		response.Username = &c.User.Username
 	}
 
+	// 检查当前用户是否已点赞
+	if currentUserID != nil && len(c.Likes) > 0 {
+		for _, like := range c.Likes {
+			if like.UserID == *currentUserID {
+				response.IsLiked = true
+				break
+			}
+		}
+	}
+
 	// 如果有回复，转换为响应格式
 	if len(c.Replies) > 0 {
 		for _, reply := range c.Replies {
-			response.Replies = append(response.Replies, reply.ToResponse())
+			response.Replies = append(response.Replies, reply.ToResponse(currentUserID))
 		}
 	}
 
@@ -99,4 +125,8 @@ func (c *Comment) ToResponse() CommentResponse {
 
 func (Comment) TableName() string {
 	return "comments"
+}
+
+func (CommentLike) TableName() string {
+	return "comment_likes"
 }
