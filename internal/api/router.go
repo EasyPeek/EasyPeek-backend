@@ -156,6 +156,10 @@ func SetupRoutes() *gin.Engine {
 			{
 				adminEvents.PUT("/:id/tags", eventHandler.UpdateEventTags)
 				adminEvents.POST("/generate", eventHandler.GenerateEventsFromNews)
+				adminEvents.POST("/:id/stats/update", eventHandler.UpdateEventStats)        // 更新单个事件统计信息
+				adminEvents.POST("/stats/update-all", eventHandler.UpdateAllEventStats)     // 更新所有事件统计信息
+				adminEvents.POST("/:id/hotness/refresh", eventHandler.RefreshEventHotness)  // 刷新事件热度
+				adminEvents.POST("/stats/batch-update", eventHandler.BatchUpdateEventStats) // 批量更新事件统计信息
 			}
 
 			// 系统内部路由（需要系统权限或管理员权限）
