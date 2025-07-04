@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html"
 	"log"
+	"math/rand"
 	"net/http"
 	"regexp"
 	"strings"
@@ -24,6 +25,9 @@ type RSSService struct {
 }
 
 func NewRSSService() *RSSService {
+	// 初始化随机数种子
+	rand.Seed(time.Now().UnixNano())
+
 	// 创建带有自定义HTTP客户端的解析器
 	parser := gofeed.NewParser()
 
@@ -384,6 +388,78 @@ func (s *RSSService) FetchAllRSSFeeds() (*models.RSSFetchResult, error) {
 	return result, nil
 }
 
+// generateNewsStats 为新闻生成合理的统计数据
+func (s *RSSService) generateNewsStats(publishedAt time.Time, source *models.RSSSource) (int64, int64, int64, int64, float64) {
+	// 根据发布时间计算时间权重（越新的新闻基础数据越低）
+	now := time.Now()
+	hoursOld := now.Sub(publishedAt).Hours()
+
+	// 时间权重：0-24小时内权重最低，随时间增加
+	timeWeight := 1.0
+	if hoursOld <= 24 {
+		timeWeight = 0.3 + (hoursOld / 24 * 0.4) // 0.3-0.7
+	} else if hoursOld <= 168 { // 一周内
+		timeWeight = 0.7 + ((hoursOld - 24) / 144 * 0.3) // 0.7-1.0
+	} else {
+		timeWeight = 1.0 + (hoursOld-168)/168*0.5 // 1.0-1.5
+	}
+
+	// 根据RSS源的重要性调整基础权重
+	sourceWeight := 1.0
+	switch source.Priority {
+	case 1, 2: // 高优先级源
+		sourceWeight = 1.2
+	case 3, 4: // 中优先级源
+		sourceWeight = 1.0
+	default: // 低优先级源
+		sourceWeight = 0.8
+	}
+
+	// 生成基础统计数据
+	baseViews := int64(rand.Intn(200) + 50) // 50-250 基础浏览量
+	viewCount := int64(float64(baseViews) * timeWeight * sourceWeight)
+
+	// 点赞数约为浏览量的 3-8%
+	likeRate := 0.03 + rand.Float64()*0.05 // 3%-8%
+	likeCount := int64(float64(viewCount) * likeRate)
+
+	// 评论数约为浏览量的 0.5-2%
+	commentRate := 0.005 + rand.Float64()*0.015 // 0.5%-2%
+	commentCount := int64(float64(viewCount) * commentRate)
+
+	// 分享数约为浏览量的 1-3%
+	shareRate := 0.01 + rand.Float64()*0.02 // 1%-3%
+	shareCount := int64(float64(viewCount) * shareRate)
+
+	// 计算热度分数 (0-10分)
+	hotnessScore := float64(viewCount)*0.001 +
+		float64(likeCount)*0.01 +
+		float64(commentCount)*0.05 +
+		float64(shareCount)*0.02
+
+	// 添加时间衰减
+	if hoursOld <= 24 {
+		hotnessScore *= 1.5 // 24小时内热度加成
+	} else if hoursOld <= 168 {
+		hotnessScore *= (1.5 - (hoursOld-24)/144*0.5) // 逐渐衰减
+	} else {
+		hotnessScore *= 1.0 - (hoursOld-168)/168*0.3 // 继续衰减
+	}
+
+	// 限制热度分数在0-10之间
+	if hotnessScore > 10 {
+		hotnessScore = 10
+	}
+	if hotnessScore < 0 {
+		hotnessScore = 0
+	}
+
+	log.Printf("[RSS DEBUG] Generated stats for news - Views: %d, Likes: %d, Comments: %d, Shares: %d, Hotness: %.2f",
+		viewCount, likeCount, commentCount, shareCount, hotnessScore)
+
+	return viewCount, likeCount, commentCount, shareCount, hotnessScore
+}
+
 // processNewsItem 处理单个新闻条目
 func (s *RSSService) processNewsItem(source *models.RSSSource, item *gofeed.Item) (*models.News, bool, error) {
 	log.Printf("[RSS DEBUG] Processing news item: %s", item.Title)
@@ -466,26 +542,67 @@ func (s *RSSService) processNewsItem(source *models.RSSSource, item *gofeed.Item
 		summary = s.extractSummary(content, 200)
 	}
 
+	// 生成或补充统计数据
+	var viewCount, likeCount, commentCount, shareCount int64
+	var hotnessScore float64
+
+	if isNew {
+		// 新新闻：生成完整的统计数据
+		viewCount, likeCount, commentCount, shareCount, hotnessScore = s.generateNewsStats(publishedAt, source)
+		log.Printf("[RSS DEBUG] Generated stats for new news: %s", title)
+	} else {
+		// 现有新闻：检查是否需要补充统计数据
+		viewCount = existingItem.ViewCount
+		likeCount = existingItem.LikeCount
+		commentCount = existingItem.CommentCount
+		shareCount = existingItem.ShareCount
+		hotnessScore = existingItem.HotnessScore
+
+		// 如果统计数据为0或过低，生成合理的数据
+		if viewCount == 0 && likeCount == 0 && commentCount == 0 {
+			log.Printf("[RSS DEBUG] Existing news has no stats, generating new stats for: %s", title)
+			viewCount, likeCount, commentCount, shareCount, hotnessScore = s.generateNewsStats(publishedAt, source)
+		} else if viewCount < 10 && time.Since(publishedAt).Hours() > 24 {
+			// 如果发布超过24小时但浏览量还很低，适当补充一些数据
+			log.Printf("[RSS DEBUG] Boosting low stats for older news: %s", title)
+			additionalViews, additionalLikes, additionalComments, additionalShares, newHotness := s.generateNewsStats(publishedAt, source)
+
+			// 增加一些数据，但不要完全替换
+			viewCount += additionalViews / 3
+			likeCount += additionalLikes / 3
+			commentCount += additionalComments / 3
+			shareCount += additionalShares / 3
+
+			// 重新计算热度
+			hotnessScore = newHotness
+		}
+	}
+
 	// 更新或创建新闻条目
 	newsItem := models.News{
-		RSSSourceID: &source.ID,
-		SourceType:  models.NewsTypeRSS,
-		Title:       title,
-		Link:        link,
-		Description: description,
-		Content:     content,
-		Summary:     summary,
-		Author:      author,
-		Category:    categoryStr,
-		Tags:        utils.SliceToJSON(categories),
-		PublishedAt: publishedAt,
-		GUID:        guid,
-		ImageURL:    imageURL,
-		Status:      "published",
-		IsProcessed: false,
-		Source:      source.Name,
-		Language:    source.Language,
-		IsActive:    true,
+		RSSSourceID:  &source.ID,
+		SourceType:   models.NewsTypeRSS,
+		Title:        title,
+		Link:         link,
+		Description:  description,
+		Content:      content,
+		Summary:      summary,
+		Author:       author,
+		Category:     categoryStr,
+		Tags:         utils.SliceToJSON(categories),
+		PublishedAt:  publishedAt,
+		GUID:         guid,
+		ImageURL:     imageURL,
+		Status:       "published",
+		IsProcessed:  false,
+		Source:       source.Name,
+		Language:     source.Language,
+		IsActive:     true,
+		ViewCount:    viewCount,
+		LikeCount:    likeCount,
+		CommentCount: commentCount,
+		ShareCount:   shareCount,
+		HotnessScore: hotnessScore,
 	}
 
 	// 保存到数据库
@@ -510,6 +627,13 @@ func (s *RSSService) processNewsItem(source *models.RSSSource, item *gofeed.Item
 		existingItem.Source = source.Name
 		existingItem.Language = source.Language
 		existingItem.IsActive = true
+
+		// 更新统计数据（如果生成了新的数据）
+		existingItem.ViewCount = viewCount
+		existingItem.LikeCount = likeCount
+		existingItem.CommentCount = commentCount
+		existingItem.ShareCount = shareCount
+		existingItem.HotnessScore = hotnessScore
 
 		if err := s.db.Save(&existingItem).Error; err != nil {
 			log.Printf("[RSS ERROR] Failed to update news item: %v", err)
