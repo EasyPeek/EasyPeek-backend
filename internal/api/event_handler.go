@@ -720,3 +720,116 @@ func (h *EventHandler) GetNewsByEventID(c *gin.Context) {
 
 	utils.Success(c, newsResponses)
 }
+
+// UpdateEventStats 更新事件统计信息
+// @Summary 更新事件统计信息
+// @Description 更新指定事件的统计信息，包括新闻数、浏览量、热度等，并重新生成标签
+// @Tags events
+// @Produce json
+// @Param id path int true "事件ID"
+// @Success 200 {object} utils.Response
+// @Failure 400 {object} utils.Response
+// @Failure 404 {object} utils.Response
+// @Failure 500 {object} utils.Response
+// @Security BearerAuth
+// @Router /api/v1/events/{id}/stats/update [post]
+func (h *EventHandler) UpdateEventStats(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "Invalid event ID")
+		return
+	}
+
+	err = h.eventService.UpdateEventStats(uint(id))
+	if err != nil {
+		utils.InternalServerError(c, "Failed to update event stats: "+err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{"message": "Event stats updated successfully"})
+}
+
+// UpdateAllEventStats 更新所有事件统计信息
+// @Summary 更新所有事件统计信息
+// @Description 批量更新所有事件的统计信息，包括新闻数、浏览量、热度等，并重新生成标签
+// @Tags events
+// @Produce json
+// @Success 200 {object} utils.Response
+// @Failure 500 {object} utils.Response
+// @Security BearerAuth
+// @Router /api/v1/events/stats/update-all [post]
+func (h *EventHandler) UpdateAllEventStats(c *gin.Context) {
+	err := h.eventService.UpdateAllEventStats()
+	if err != nil {
+		utils.InternalServerError(c, "Failed to update all event stats: "+err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{"message": "All event stats updated successfully"})
+}
+
+// RefreshEventHotness 刷新事件热度
+// @Summary 刷新事件热度
+// @Description 刷新指定事件的热度评分，包括更新统计信息和重新计算热度
+// @Tags events
+// @Produce json
+// @Param id path int true "事件ID"
+// @Success 200 {object} utils.Response
+// @Failure 400 {object} utils.Response
+// @Failure 404 {object} utils.Response
+// @Failure 500 {object} utils.Response
+// @Security BearerAuth
+// @Router /api/v1/events/{id}/hotness/refresh [post]
+func (h *EventHandler) RefreshEventHotness(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "Invalid event ID")
+		return
+	}
+
+	err = h.eventService.RefreshEventHotness(uint(id))
+	if err != nil {
+		utils.InternalServerError(c, "Failed to refresh event hotness: "+err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{"message": "Event hotness refreshed successfully"})
+}
+
+// BatchUpdateEventStats 批量更新指定事件统计信息
+// @Summary 批量更新指定事件统计信息
+// @Description 批量更新指定事件的统计信息
+// @Tags events
+// @Accept json
+// @Produce json
+// @Param eventIds body []uint true "事件ID列表"
+// @Success 200 {object} utils.Response
+// @Failure 400 {object} utils.Response
+// @Failure 500 {object} utils.Response
+// @Security BearerAuth
+// @Router /api/v1/events/stats/batch-update [post]
+func (h *EventHandler) BatchUpdateEventStats(c *gin.Context) {
+	var eventIDs []uint
+	if err := c.ShouldBindJSON(&eventIDs); err != nil {
+		utils.BadRequest(c, "Invalid request body")
+		return
+	}
+
+	if len(eventIDs) == 0 {
+		utils.BadRequest(c, "Event IDs list cannot be empty")
+		return
+	}
+
+	err := h.eventService.BatchUpdateEventStats(eventIDs)
+	if err != nil {
+		utils.InternalServerError(c, "Failed to batch update event stats: "+err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{
+		"message":       "Event stats updated successfully",
+		"updated_count": len(eventIDs),
+	})
+}

@@ -56,6 +56,13 @@ func main() {
 	}
 	defer rssScheduler.Stop()
 
+	// initialize Event scheduler
+	eventScheduler := scheduler.NewEventScheduler()
+	if err := eventScheduler.Start(); err != nil {
+		log.Fatalf("Failed to start Event scheduler: %v", err)
+	}
+	defer eventScheduler.Stop()
+
 	// initialize AI event generation service
 	aiEventService := services.NewAIEventService()
 
@@ -119,6 +126,9 @@ func main() {
 		// 停止RSS调度器
 		rssScheduler.Stop()
 
+		// 停止事件调度器
+		eventScheduler.Stop()
+
 		if err := server.Close(); err != nil {
 			log.Printf("Server shutdown error: %v", err)
 		}
@@ -126,6 +136,7 @@ func main() {
 
 	log.Println("Server is starting on :8080")
 	log.Println("RSS scheduler is running")
+	log.Println("Event scheduler is running (stats update every 2 hours, hotness refresh every 4 hours)")
 	log.Println("AI Event generation service is running (every 30 minutes)")
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
