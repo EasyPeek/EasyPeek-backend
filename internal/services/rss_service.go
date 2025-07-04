@@ -95,8 +95,33 @@ func (s *RSSService) CreateRSSSource(req *models.CreateRSSSourceRequest) (*model
 	return s.convertToRSSSourceResponse(&source), nil
 }
 
+// RSSSourceListResponse RSS源列表响应结构
+type RSSSourceListResponse struct {
+	Total   int64                      `json:"total"`
+	Sources []models.RSSSourceResponse `json:"sources"`
+}
+
+// NewsListResponse 新闻列表响应结构
+type NewsListResponse struct {
+	Total int64                  `json:"total"`
+	News  []models.NewsResponse `json:"news"`
+}
+
+// NewsQueryRequest 新闻查询请求结构
+type NewsQueryRequest struct {
+	Page        int    `json:"page" form:"page"`
+	Limit       int    `json:"limit" form:"limit"`
+	RSSSourceID uint   `json:"rss_source_id" form:"rss_source_id"`
+	Category    string `json:"category" form:"category"`
+	Status      string `json:"status" form:"status"`
+	Search      string `json:"search" form:"search"`
+	StartDate   string `json:"start_date" form:"start_date"`
+	EndDate     string `json:"end_date" form:"end_date"`
+	SortBy      string `json:"sort_by" form:"sort_by"`
+}
+
 // GetRSSSources 获取RSS源列表
-func (s *RSSService) GetRSSSources(page, limit int, category string, isActive *bool) (*models.NewsListResponse, error) {
+func (s *RSSService) GetRSSSources(page, limit int, category string, isActive *bool) (*RSSSourceListResponse, error) {
 	var sources []models.RSSSource
 	var total int64
 
@@ -122,24 +147,14 @@ func (s *RSSService) GetRSSSources(page, limit int, category string, isActive *b
 	}
 
 	// 转换响应格式
-	var responses []models.NewsItemResponse
+	var responses []models.RSSSourceResponse
 	for _, source := range sources {
-		// 这里将RSS源信息转换为新闻响应格式以复用现有结构
-		response := models.NewsItemResponse{
-			ID:          source.ID,
-			Title:       source.Name,
-			Description: source.Description,
-			Category:    source.Category,
-			Tags:        source.Tags,
-			CreatedAt:   source.CreatedAt,
-			UpdatedAt:   source.UpdatedAt,
-		}
-		responses = append(responses, response)
+		responses = append(responses, *s.convertToRSSSourceResponse(&source))
 	}
 
-	return &models.NewsListResponse{
-		Total: total,
-		News:  responses,
+	return &RSSSourceListResponse{
+		Total:   total,
+		Sources: responses,
 	}, nil
 }
 
@@ -729,7 +744,7 @@ func (s *RSSService) extractSummary(htmlContent string, maxLength int) string {
 }
 
 // GetNews 获取新闻列表
-func (s *RSSService) GetNews(query *models.NewsQueryRequest) (*models.NewsListResponse, error) {
+func (s *RSSService) GetNews(query *NewsQueryRequest) (*NewsListResponse, error) {
 	var news []models.News
 	var total int64
 
@@ -785,45 +800,19 @@ func (s *RSSService) GetNews(query *models.NewsQueryRequest) (*models.NewsListRe
 	}
 
 	// 转换响应格式
-	var newsResponses []models.NewsItemResponse
+	var newsResponses []models.NewsResponse
 	for _, item := range news {
-		// 将 NewsResponse 转换为 NewsItemResponse 格式以保持API兼容性
-		newsResp := item.ToResponse()
-		newsItemResp := models.NewsItemResponse{
-			ID:           newsResp.ID,
-			RSSSourceID:  *newsResp.RSSSourceID,
-			Title:        newsResp.Title,
-			Link:         newsResp.Link,
-			Description:  newsResp.Description,
-			Content:      newsResp.Content,
-			Author:       newsResp.Author,
-			Category:     newsResp.Category,
-			Tags:         newsResp.Tags,
-			PublishedAt:  newsResp.PublishedAt,
-			GUID:         newsResp.GUID,
-			ImageURL:     newsResp.ImageURL,
-			ViewCount:    newsResp.ViewCount,
-			LikeCount:    newsResp.LikeCount,
-			CommentCount: newsResp.CommentCount,
-			ShareCount:   newsResp.ShareCount,
-			HotnessScore: newsResp.HotnessScore,
-			Status:       newsResp.Status,
-			IsProcessed:  newsResp.IsProcessed,
-			CreatedAt:    newsResp.CreatedAt,
-			UpdatedAt:    newsResp.UpdatedAt,
-			RSSSource:    newsResp.RSSSource,
-		}
-		newsResponses = append(newsResponses, newsItemResp)
+		newsResponses = append(newsResponses, item.ToResponse())
 	}
 
-	return &models.NewsListResponse{
+	return &NewsListResponse{
 		Total: total,
 		News:  newsResponses,
 	}, nil
 }
 
 // GetNewsItem 获取单个新闻详情
-func (s *RSSService) GetNewsItem(id uint) (*models.NewsItemResponse, error) {
+func (s *RSSService) GetNewsItem(id uint) (*models.NewsResponse, error) {
 	var newsItem models.News
 	if err := s.db.Preload("RSSSource").Where("source_type = ?", models.NewsTypeRSS).First(&newsItem, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -839,32 +828,8 @@ func (s *RSSService) GetNewsItem(id uint) (*models.NewsItemResponse, error) {
 	// 重新计算热度
 	s.calculateNewsHotness(newsItem.ID)
 
-	// 转换为NewsItemResponse格式
-	newsResp := newsItem.ToResponse()
-	response := models.NewsItemResponse{
-		ID:           newsResp.ID,
-		RSSSourceID:  *newsResp.RSSSourceID,
-		Title:        newsResp.Title,
-		Link:         newsResp.Link,
-		Description:  newsResp.Description,
-		Content:      newsResp.Content,
-		Author:       newsResp.Author,
-		Category:     newsResp.Category,
-		Tags:         newsResp.Tags,
-		PublishedAt:  newsResp.PublishedAt,
-		GUID:         newsResp.GUID,
-		ImageURL:     newsResp.ImageURL,
-		ViewCount:    newsResp.ViewCount,
-		LikeCount:    newsResp.LikeCount,
-		CommentCount: newsResp.CommentCount,
-		ShareCount:   newsResp.ShareCount,
-		HotnessScore: newsResp.HotnessScore,
-		Status:       newsResp.Status,
-		IsProcessed:  newsResp.IsProcessed,
-		CreatedAt:    newsResp.CreatedAt,
-		UpdatedAt:    newsResp.UpdatedAt,
-		RSSSource:    newsResp.RSSSource,
-	}
+	// 直接使用 ToResponse 方法
+	response := newsItem.ToResponse()
 	return &response, nil
 }
 

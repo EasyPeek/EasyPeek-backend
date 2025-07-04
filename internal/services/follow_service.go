@@ -56,8 +56,10 @@ func (s *FollowService) AddFollow(userID uint, eventID uint) error {
 
 	// 创建关注记录
 	follow := &models.Follow{
-		UserID:  userID,
-		EventID: eventID,
+		UserID:       userID,
+		EventID:      eventID,
+		FollowType:   "event", // 设置关注类型为事件
+		FollowTarget: "event", // 设置关注目标为事件
 	}
 
 	err = s.db.Create(follow).Error
