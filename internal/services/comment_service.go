@@ -315,6 +315,24 @@ func (s *CommentService) LikeComment(commentID uint, userID uint) error {
 		return fmt.Errorf("failed to like comment: %w", err)
 	}
 
+	// 创建点赞消息通知（仅当评论有作者且不是自己给自己点赞时）
+	if comment.UserID != nil && *comment.UserID != userID {
+		messageService := NewMessageService()
+		title := "您的评论收到了点赞"
+		content := fmt.Sprintf("用户「%s」点赞了您的评论「%s」", user.Username, comment.Content)
+
+		// 创建点赞消息（忽略错误，不影响点赞操作）
+		_ = messageService.CreateMessage(
+			*comment.UserID, // 评论作者ID
+			"like",
+			title,
+			content,
+			"comment",
+			commentID,
+			&userID, // 点赞者ID
+		)
+	}
+
 	return nil
 }
 
