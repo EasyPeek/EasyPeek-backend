@@ -63,11 +63,13 @@ func SetupRoutes() *gin.Engine {
 		messages := v1.Group("/messages")
 		messages.Use(middleware.AuthMiddleware())
 		{
-			messages.GET("", messageHandler.GetMessages)                 // 获取消息列表
-			messages.GET("/unread-count", messageHandler.GetUnreadCount) // 获取未读消息数量
-			messages.PUT("/:id/read", messageHandler.MarkAsRead)         // 标记消息已读
-			messages.PUT("/read-all", messageHandler.MarkAllAsRead)      // 标记全部已读
-			messages.DELETE("/:id", messageHandler.DeleteMessage)        // 删除消息
+			messages.GET("", messageHandler.GetMessages)                                             // 获取消息列表
+			messages.GET("/unread-count", messageHandler.GetUnreadCount)                             // 获取未读消息数量
+			messages.GET("/followed-events-news", messageHandler.GetFollowedEventsLatestNews)        // 获取关注事件的最新新闻
+			messages.GET("/followed-events-recent-news", messageHandler.GetFollowedEventsRecentNews) // 获取关注事件的最近新闻
+			messages.PUT("/:id/read", messageHandler.MarkAsRead)                                     // 标记消息已读
+			messages.PUT("/read-all", messageHandler.MarkAllAsRead)                                  // 标记全部已读
+			messages.DELETE("/:id", messageHandler.DeleteMessage)                                    // 删除消息
 		}
 
 		// follow routes
@@ -111,6 +113,7 @@ func SetupRoutes() *gin.Engine {
 			comments.GET("/:id", commentHandler.GetCommentByID)                // 根据ID获取单条评论
 			comments.GET("/news/:news_id", commentHandler.GetCommentsByNewsID) // 根据新闻ID获取评论列表
 			comments.GET("/user/:user_id", commentHandler.GetCommentsByUserID) // 根据用户ID获取评论列表
+			comments.POST("/anonymous", commentHandler.CreateAnonymousComment) // 创建匿名评论
 
 			// 需要身份验证的路由
 			authComments := comments.Group("")
@@ -158,6 +161,10 @@ func SetupRoutes() *gin.Engine {
 			{
 				adminEvents.PUT("/:id/tags", eventHandler.UpdateEventTags)
 				adminEvents.POST("/generate", eventHandler.GenerateEventsFromNews)
+				adminEvents.POST("/:id/stats/update", eventHandler.UpdateEventStats)        // 更新单个事件统计信息
+				adminEvents.POST("/stats/update-all", eventHandler.UpdateAllEventStats)     // 更新所有事件统计信息
+				adminEvents.POST("/:id/hotness/refresh", eventHandler.RefreshEventHotness)  // 刷新事件热度
+				adminEvents.POST("/stats/batch-update", eventHandler.BatchUpdateEventStats) // 批量更新事件统计信息
 			}
 
 			// 系统内部路由（需要系统权限或管理员权限）
@@ -169,39 +176,12 @@ func SetupRoutes() *gin.Engine {
 			}
 		}
 
-		// RSS routes
-		rss := v1.Group("/rss")
-		{
-			// 公开路由
-			rss.GET("/news", rssHandler.GetNews)
-			rss.GET("/news/hot", rssHandler.GetHotNews)
-			rss.GET("/news/latest", rssHandler.GetLatestNews)
-			rss.GET("/news/category/:category", rssHandler.GetNewsByCategory)
-			rss.GET("/news/:id", rssHandler.GetNewsItem)
-
-			// 管理员路由
-			adminRSS := rss.Group("")
-			adminRSS.Use(middleware.AuthMiddleware())
-			adminRSS.Use(middleware.RoleMiddleware(middleware.RoleAdmin))
-			{
-				adminRSS.GET("/sources", rssHandler.GetRSSSources)
-				adminRSS.POST("/sources", rssHandler.CreateRSSSource)
-				adminRSS.PUT("/sources/:id", rssHandler.UpdateRSSSource)
-				adminRSS.DELETE("/sources/:id", rssHandler.DeleteRSSSource)
-				adminRSS.POST("/sources/:id/fetch", rssHandler.FetchRSSFeed)
-				adminRSS.POST("/fetch-all", rssHandler.FetchAllRSSFeeds)
-			}
-		}
-
 		// admin routes
 		admin := v1.Group("/admin")
 		admin.Use(middleware.AuthMiddleware())
 		admin.Use(middleware.AdminAuthMiddleware())
 		{
-			// admin login
-			// admin.POST("/login", adminHandler.AdminLogin)
-
-			// 系统统计
+			// system stats
 			admin.GET("/stats", adminHandler.GetSystemStats)
 
 			// 用户管理
@@ -210,11 +190,25 @@ func SetupRoutes() *gin.Engine {
 				users.GET("", adminHandler.GetAllUsers)          // 获取所有用户（带过滤）
 				users.GET("/active", userHandler.GetActiveUsers) // 获取活跃用户（保持兼容）
 				users.GET("/:id", adminHandler.GetUserByID)      // 获取指定用户
-				users.PUT("/:id", adminHandler.UpdateUser)       // 更新用户信息
-				users.DELETE("/:id", adminHandler.DeleteUser)    // 管理员删除用户（硬删除）
+
+				users.PUT("/:id", adminHandler.UpdateUser)    // 更新用户信息
+				users.DELETE("/:id", adminHandler.DeleteUser) // 管理员删除用户（硬删除）
 				// 保留原有的单独角色和状态更新接口
 				// users.PUT("/:id/role", userHandler.UpdateUserRole)     // 更新用户角色
 				// users.PUT("/:id/status", userHandler.UpdateUserStatus) // 更新用户状态
+			}
+
+			// RSS Management
+			rss := admin.Group("/rss")
+			{
+				rss.GET("", rssHandler.GetRSSSources)               // 获取所有RSS源
+				rss.POST("", rssHandler.CreateRSSSource)            // 创建RSS源
+				rss.PUT("/:id", rssHandler.UpdateRSSSource)         // 更新RSS源
+				rss.DELETE("/:id", rssHandler.DeleteRSSSource)      // 删除RSS源
+				rss.POST("/:id/fetch", rssHandler.FetchRSSFeed)     // 手动抓取RSS源
+				rss.POST("/fetch-all", rssHandler.FetchAllRSSFeeds) // 抓取所有RSS源
+				rss.GET("/categories", rssHandler.GetRSSCategories) // 获取RSS分类列表
+				rss.GET("/stats", rssHandler.GetRSSStats)           // 获取RSS统计信息
 			}
 
 			// 事件管理
@@ -238,17 +232,6 @@ func SetupRoutes() *gin.Engine {
 			{
 				comments.GET("", commentHandler.GetAllComments)            // 获取所有评论
 				comments.DELETE("/:id", commentHandler.AdminDeleteComment) // 管理员删除评论（硬删除）
-			}
-
-			// RSS源管理
-			rssAdmin := admin.Group("/rss-sources")
-			{
-				rssAdmin.GET("", adminHandler.GetAllRSSSources)            // 获取所有RSS源
-				rssAdmin.POST("", adminHandler.CreateRSSSource)            // 创建RSS源
-				rssAdmin.PUT("/:id", adminHandler.UpdateRSSSource)         // 更新RSS源
-				rssAdmin.DELETE("/:id", adminHandler.DeleteRSSSource)      // 删除RSS源
-				rssAdmin.POST("/:id/fetch", adminHandler.FetchRSSFeed)     // 手动抓取RSS源
-				rssAdmin.POST("/fetch-all", adminHandler.FetchAllRSSFeeds) // 抓取所有RSS源
 			}
 
 			// 消息管理

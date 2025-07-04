@@ -65,6 +65,7 @@ func main() {
 	}
 	defer rssScheduler.Stop()
 
+<<<<<<< HEAD
 	// initialize AI event generation service with config from yaml
 	aiEventConfig := &services.AIEventConfig{
 		Provider:    cfg.AI.Provider,
@@ -80,6 +81,17 @@ func main() {
 	aiEventConfig.EventGeneration.MinNewsCount = 2
 	aiEventConfig.EventGeneration.TimeWindowHours = 24
 	aiEventConfig.EventGeneration.MaxNewsLimit = 0 // 0表示不限制，处理所有新闻
+=======
+	// initialize Event scheduler
+	eventScheduler := scheduler.NewEventScheduler()
+	if err := eventScheduler.Start(); err != nil {
+		log.Fatalf("Failed to start Event scheduler: %v", err)
+	}
+	defer eventScheduler.Stop()
+
+	// initialize AI event generation service
+	aiEventService := services.NewAIEventService()
+>>>>>>> 2a48be314c5676635d9608a5e0bc9cac425846e0
 
 	aiEventService := services.NewAIEventServiceWithConfig(aiEventConfig)
 	log.Println("AI事件服务配置：使用config.yaml中的AI配置，处理所有未关联的新闻")
@@ -140,6 +152,9 @@ func main() {
 		// 停止RSS调度器
 		rssScheduler.Stop()
 
+		// 停止事件调度器
+		eventScheduler.Stop()
+
 		if err := server.Close(); err != nil {
 			log.Printf("Server shutdown error: %v", err)
 		}
@@ -147,6 +162,7 @@ func main() {
 
 	log.Println("Server is starting on :8080")
 	log.Println("RSS scheduler is running")
+	log.Println("Event scheduler is running (stats update every 2 hours, hotness refresh every 4 hours)")
 	log.Println("AI Event generation service is running (every 30 minutes)")
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

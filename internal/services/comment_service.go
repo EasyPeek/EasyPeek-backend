@@ -50,7 +50,7 @@ func (s *CommentService) CreateComment(req *models.CommentCreateRequest, userID 
 	// 构造 Comment 模型实例
 	comment := &models.Comment{
 		NewsID:    req.NewsID,
-		UserID:    userID,
+		UserID:    &userID, // 使用指针，因为UserID现在是指针类型
 		Content:   req.Content,
 		CreatedAt: time.Now(),
 	}
@@ -58,6 +58,44 @@ func (s *CommentService) CreateComment(req *models.CommentCreateRequest, userID 
 	// 将评论保存到数据库
 	if err := s.db.Create(comment).Error; err != nil {
 		return nil, fmt.Errorf("failed to create comment: %w", err)
+	}
+
+	// 更新新闻的评论数
+	if err := s.db.Model(&news).Update("comment_count", gorm.Expr("comment_count + ?", 1)).Error; err != nil {
+		// 这里只是记录错误，不影响评论创建的成功
+		fmt.Printf("failed to update news comment count: %v\n", err)
+	}
+
+	return comment, nil
+}
+
+// CreateAnonymousComment 创建匿名评论
+func (s *CommentService) CreateAnonymousComment(req *models.CommentAnonymousCreateRequest) (*models.Comment, error) {
+	// 检查数据库连接是否已初始化
+	if s.db == nil {
+		return nil, errors.New("database connection not initialized")
+	}
+
+	// 验证新闻是否存在
+	var news models.News
+	if err := s.db.First(&news, req.NewsID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("news not found")
+		}
+		return nil, fmt.Errorf("failed to check news existence: %w", err)
+	}
+
+	// 构造匿名评论实例，UserID为nil
+	comment := &models.Comment{
+		NewsID:    req.NewsID,
+		UserID:    nil, // 匿名评论，UserID为空
+		Content:   req.Content,
+		CreatedAt: time.Now(),
+	}
+
+	// 将评论保存到数据库
+	if err := s.db.Create(comment).Error; err != nil {
+		return nil, fmt.Errorf("failed to create anonymous comment: %w", err)
 	}
 
 	// 更新新闻的评论数
@@ -178,7 +216,11 @@ func (s *CommentService) DeleteComment(commentID uint, userID uint) error {
 	}
 
 	// 检查权限：只有评论的作者才能删除评论
-	if comment.UserID != userID {
+	// 匿名评论不能被删除（因为没有用户ID）
+	if comment.UserID == nil {
+		return errors.New("permission denied: anonymous comments cannot be deleted")
+	}
+	if *comment.UserID != userID {
 		return errors.New("permission denied: only comment author can delete")
 	}
 
@@ -271,6 +313,24 @@ func (s *CommentService) LikeComment(commentID uint, userID uint) error {
 	// 增加评论的点赞数
 	if err := s.db.Model(&comment).Update("like_count", gorm.Expr("like_count + ?", 1)).Error; err != nil {
 		return fmt.Errorf("failed to like comment: %w", err)
+	}
+
+	// 创建点赞消息通知（仅当评论有作者且不是自己给自己点赞时）
+	if comment.UserID != nil && *comment.UserID != userID {
+		messageService := NewMessageService()
+		title := "您的评论收到了点赞"
+		content := fmt.Sprintf("用户「%s」点赞了您的评论「%s」", user.Username, comment.Content)
+
+		// 创建点赞消息（忽略错误，不影响点赞操作）
+		_ = messageService.CreateMessage(
+			*comment.UserID, // 评论作者ID
+			"like",
+			title,
+			content,
+			"comment",
+			commentID,
+			&userID, // 点赞者ID
+		)
 	}
 
 	return nil

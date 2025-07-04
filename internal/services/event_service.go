@@ -1264,3 +1264,127 @@ func (s *EventService) convertClusterToEvent(cluster *EventCluster) models.Creat
 		RelatedLinks: links,
 	}
 }
+
+// UpdateEventStats 更新事件统计信息
+func (s *EventService) UpdateEventStats(eventID uint) error {
+	// 1. 获取事件基本信息
+	var event models.Event
+	if err := s.db.First(&event, eventID).Error; err != nil {
+		return fmt.Errorf("获取事件信息失败: %w", err)
+	}
+
+	// 2. 统计关联的新闻数量
+	var newsCount int64
+	if err := s.db.Model(&models.News{}).
+		Where("belonged_event_id = ?", eventID).
+		Count(&newsCount).Error; err != nil {
+		return fmt.Errorf("统计新闻数量失败: %w", err)
+	}
+
+	// 3. 获取关联的所有新闻来重新计算统计信息
+	var relatedNews []models.News
+	if err := s.db.Where("belonged_event_id = ?", eventID).
+		Find(&relatedNews).Error; err != nil {
+		return fmt.Errorf("获取关联新闻失败: %w", err)
+	}
+
+	// 4. 重新计算聚合统计信息
+	var totalViews, totalLikes, totalComments, totalShares int64
+	var totalHotness float64
+
+	// 生成新的标签
+	var allTags []string
+	tagCountMap := make(map[string]int)
+
+	for _, news := range relatedNews {
+		totalViews += news.ViewCount
+		totalLikes += news.LikeCount
+		totalComments += news.CommentCount
+		totalShares += news.ShareCount
+		totalHotness += news.HotnessScore
+
+		// 从新闻中提取标签
+		newsTags := s.extractTags(news)
+		for _, tag := range newsTags {
+			tagCountMap[tag]++
+		}
+	}
+
+	// 5. 选择出现频次最高的标签作为事件标签
+	for tag, count := range tagCountMap {
+		if count >= 2 || len(tagCountMap) <= 5 { // 如果标签总数不多，降低阈值
+			allTags = append(allTags, tag)
+		}
+	}
+
+	// 6. 按标签出现次数排序，取前10个
+	sort.Slice(allTags, func(i, j int) bool {
+		return tagCountMap[allTags[i]] > tagCountMap[allTags[j]]
+	})
+
+	maxTags := 10
+	if len(allTags) > maxTags {
+		allTags = allTags[:maxTags]
+	}
+
+	// 7. 更新事件的统计信息
+	updates := map[string]interface{}{
+		"view_count":    totalViews,
+		"like_count":    totalLikes,
+		"comment_count": totalComments,
+		"share_count":   totalShares,
+		"hotness_score": totalHotness,
+		"tags":          sliceToJSON(allTags),
+		"updated_at":    time.Now(),
+	}
+
+	if err := s.db.Model(&models.Event{}).
+		Where("id = ?", eventID).
+		Updates(updates).Error; err != nil {
+		return fmt.Errorf("更新事件统计信息失败: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateAllEventStats 更新所有事件的统计信息
+func (s *EventService) UpdateAllEventStats() error {
+	// 获取所有事件ID
+	var eventIDs []uint
+	if err := s.db.Model(&models.Event{}).
+		Pluck("id", &eventIDs).Error; err != nil {
+		return fmt.Errorf("获取事件ID列表失败: %w", err)
+	}
+
+	// 逐个更新事件统计信息
+	for _, eventID := range eventIDs {
+		if err := s.UpdateEventStats(eventID); err != nil {
+			// 记录错误但继续处理其他事件
+			fmt.Printf("更新事件 %d 统计信息失败: %v\n", eventID, err)
+		}
+	}
+
+	return nil
+}
+
+// RefreshEventHotness 刷新事件热度评分
+func (s *EventService) RefreshEventHotness(eventID uint) error {
+	// 先更新统计信息
+	if err := s.UpdateEventStats(eventID); err != nil {
+		return err
+	}
+
+	// 重新计算热度
+	_, err := s.CalculateHotness(eventID, nil)
+	return err
+}
+
+// BatchUpdateEventStats 批量更新指定事件的统计信息
+func (s *EventService) BatchUpdateEventStats(eventIDs []uint) error {
+	for _, eventID := range eventIDs {
+		if err := s.UpdateEventStats(eventID); err != nil {
+			return fmt.Errorf("批量更新事件 %d 统计信息失败: %w", eventID, err)
+		}
+	}
+	return nil
+}

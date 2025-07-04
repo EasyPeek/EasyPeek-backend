@@ -64,6 +64,33 @@ func (h *CommentHandler) CreateComment(c *gin.Context) {
 	utils.Success(c, comment.ToResponse())
 }
 
+// CreateAnonymousComment 创建匿名评论
+func (h *CommentHandler) CreateAnonymousComment(c *gin.Context) {
+	var req models.CommentAnonymousCreateRequest
+	// 将请求的 JSON 主体绑定到 CommentAnonymousCreateRequest 结构体
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Invalid request data: "+err.Error())
+		return
+	}
+
+	// 调用 CommentService 的 CreateAnonymousComment 方法来创建匿名评论
+	comment, err := h.commentService.CreateAnonymousComment(&req)
+	if err != nil {
+		// 根据错误类型返回不同的 HTTP 状态码
+		if err.Error() == "database connection not initialized" {
+			utils.InternalServerError(c, err.Error())
+		} else if err.Error() == "news not found" {
+			utils.NotFound(c, err.Error())
+		} else {
+			utils.BadRequest(c, err.Error())
+		}
+		return
+	}
+
+	// 成功创建，返回评论的响应格式
+	utils.Success(c, comment.ToResponse())
+}
+
 // GetCommentByID 根据ID获取单条评论
 func (h *CommentHandler) GetCommentByID(c *gin.Context) {
 	// 从 URL 参数中获取评论ID

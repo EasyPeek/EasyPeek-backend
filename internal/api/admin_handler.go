@@ -27,7 +27,6 @@ func NewAdminHandler() *AdminHandler {
 	}
 }
 
-// 
 func (h *AdminHandler) AdminLogin(c *gin.Context) {
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -49,9 +48,7 @@ func (h *AdminHandler) AdminLogin(c *gin.Context) {
 	utils.Success(c, response)
 }
 
-// ===== 系统统计 =====
-
-// GetSystemStats 获取系统统计信息
+// GetSystemStats
 func (h *AdminHandler) GetSystemStats(c *gin.Context) {
 	stats, err := h.adminService.GetSystemStats()
 	if err != nil {
@@ -62,9 +59,8 @@ func (h *AdminHandler) GetSystemStats(c *gin.Context) {
 	utils.Success(c, stats)
 }
 
-// ===== 用户管理 =====
-
-// GetAllUsers 获取所有用户列表（带过滤）
+// user
+// GetAllUsers
 func (h *AdminHandler) GetAllUsers(c *gin.Context) {
 	pageStr := c.DefaultQuery("page", "1")
 	sizeStr := c.DefaultQuery("size", "10")
@@ -274,43 +270,4 @@ func (h *AdminHandler) DeleteNews(c *gin.Context) {
 	// 复用现有的新闻删除逻辑
 	newsHandler := NewNewsHandler()
 	newsHandler.DeleteNews(c)
-}
-
-// ===== RSS源管理 =====
-
-// GetAllRSSSources 获取所有RSS源
-func (h *AdminHandler) GetAllRSSSources(c *gin.Context) {
-	// 复用现有的RSS源获取逻辑
-	rssHandler := NewRSSHandler()
-	rssHandler.GetRSSSources(c)
-}
-
-// CreateRSSSource 创建RSS源
-func (h *AdminHandler) CreateRSSSource(c *gin.Context) {
-	rssHandler := NewRSSHandler()
-	rssHandler.CreateRSSSource(c)
-}
-
-// UpdateRSSSource 更新RSS源
-func (h *AdminHandler) UpdateRSSSource(c *gin.Context) {
-	rssHandler := NewRSSHandler()
-	rssHandler.UpdateRSSSource(c)
-}
-
-// DeleteRSSSource 删除RSS源
-func (h *AdminHandler) DeleteRSSSource(c *gin.Context) {
-	rssHandler := NewRSSHandler()
-	rssHandler.DeleteRSSSource(c)
-}
-
-// FetchRSSFeed 手动抓取RSS源
-func (h *AdminHandler) FetchRSSFeed(c *gin.Context) {
-	rssHandler := NewRSSHandler()
-	rssHandler.FetchRSSFeed(c)
-}
-
-// FetchAllRSSFeeds 抓取所有RSS源
-func (h *AdminHandler) FetchAllRSSFeeds(c *gin.Context) {
-	rssHandler := NewRSSHandler()
-	rssHandler.FetchAllRSSFeeds(c)
 }

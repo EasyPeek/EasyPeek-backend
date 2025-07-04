@@ -17,28 +17,56 @@ import (
 /*
 SeedService 种子数据服务
 
-主要功能：
-1. 导入新闻数据从JSON文件
-2. 创建默认管理员账户
-3. 创建默认RSS源
+main functions:
+1. 从JSON文件中保存基础新闻
+2. 创建管理员账户
+3. 创建实例用户
+4. 创建RSS源
 
-使用方式：
+use example:
   seedService := NewSeedService()
-  seedService.SeedAllData()  // 导入数据
+  seedService.SeedAllData()
 */
 
 type SeedService struct {
 	db *gorm.DB
 }
 
-// NewSeedService 创建新的种子数据服务实例
+// create a new seed service instance
 func NewSeedService() *SeedService {
 	return &SeedService{
 		db: database.GetDB(),
 	}
 }
 
-// NewsJSONData 定义JSON文件中的新闻数据结构
+// import all initial data
+func (s *SeedService) SeedAllData() error {
+	log.Println("start to seed all data...")
+
+	// import news data
+	if err := s.SeedNewsFromJSON("data/new.json"); err != nil {
+		return fmt.Errorf("failed to seed news data: %w", err)
+	}
+
+	if err := s.SeedInitialAdmin(); err != nil {
+		return fmt.Errorf("failed to seed initial admin: %w", err)
+	}
+
+	// 导入示例用户
+	if err := s.SeedExampleUsers(); err != nil {
+		return fmt.Errorf("failed to seed example users: %w", err)
+	}
+
+	// 导入默认RSS源
+	if err := s.SeedRSSources(); err != nil {
+		return fmt.Errorf("failed to seed RSS sources: %w", err)
+	}
+
+	log.Println("all seed data initialized!")
+	return nil
+}
+
+// NewsJSONData define the news data structure in the JSON file
 type NewsJSONData struct {
 	Title        string  `json:"title"`
 	Content      string  `json:"content"`
@@ -66,9 +94,9 @@ type NewsJSONData struct {
 	IsProcessed  bool    `json:"is_processed"`
 }
 
-// SeedNewsFromJSON 从JSON文件导入新闻数据
+// SeedNewsFromJSON import news data from a JSON file
 func (s *SeedService) SeedNewsFromJSON(jsonFilePath string) error {
-	log.Printf("开始从文件 %s 导入新闻数据...", jsonFilePath)
+	log.Printf("start to import news data from file %s...", jsonFilePath)
 
 	// 检查数据库连接
 	if s.db == nil {
@@ -195,28 +223,6 @@ func (s *SeedService) batchInsertNews(newsList []models.News) error {
 	})
 }
 
-// SeedAllData 导入所有初始化数据
-func (s *SeedService) SeedAllData() error {
-	log.Println("开始初始化种子数据...")
-
-	// 导入新闻数据
-	if err := s.SeedNewsFromJSON("data/new.json"); err != nil {
-		return fmt.Errorf("failed to seed news data: %w", err)
-	}
-
-	if err := s.SeedInitialAdmin(); err != nil {
-		return fmt.Errorf("failed to seed initial admin: %w", err)
-	}
-
-	// 可以在这里添加其他类型的数据导入，例如：
-	// - 用户数据
-	// - RSS源数据
-	// - 其他初始化数据等
-
-	log.Println("所有种子数据初始化完成！")
-	return nil
-}
-
 // SeedInitialAdmin 创建初始管理员账户
 func (s *SeedService) SeedInitialAdmin() error {
 	if s.db == nil {
@@ -317,61 +323,120 @@ func (s *SeedService) SeedRSSources() error {
 		return err
 	}
 
-	// 如果已经存在RSS源，不需要创建
-	if rssCount > 0 {
-		log.Println("RSS sources already exist, skipping seed")
-		return nil
-	}
-
 	// 创建一些默认的RSS源
 	defaultSources := []models.RSSSource{
 		{
+<<<<<<< HEAD
 			Name:        "BBC News",
 			URL:         "http://feeds.bbci.co.uk/news/rss.xml",
 			Category:    "国际新闻",
 			Language:    "en",
 			IsActive:    true,
 			Description: "BBC 新闻RSS源",
+=======
+			Name:        "澎湃新闻",
+			URL:         "https://feedx.net/rss/thepaper.xml",
+			Category:    "综合新闻",
+			Language:    "zh",
+			IsActive:    true,
+			Description: "澎湃新闻全文RSS源，提供综合新闻资讯",
+>>>>>>> 2a48be314c5676635d9608a5e0bc9cac425846e0
 			Priority:    1,
 			UpdateFreq:  60,
 		},
 		{
+<<<<<<< HEAD
 			Name:        "CNN Top Stories",
 			URL:         "http://rss.cnn.com/rss/edition.rss",
 			Category:    "国际新闻",
 			Language:    "en",
 			IsActive:    true,
 			Description: "CNN 头条新闻RSS源",
+=======
+			Name:        "光明日报",
+			URL:         "https://feedx.net/rss/guangmingribao.xml",
+			Category:    "时政新闻",
+			Language:    "zh",
+			IsActive:    true,
+			Description: "光明日报全文RSS源，提供权威时政和文化新闻",
+>>>>>>> 2a48be314c5676635d9608a5e0bc9cac425846e0
 			Priority:    1,
 			UpdateFreq:  60,
 		},
 		{
+<<<<<<< HEAD
 			Name:        "TechCrunch",
 			URL:         "https://techcrunch.com/feed/",
 			Category:    "科技",
 			Language:    "en",
 			IsActive:    true,
 			Description: "TechCrunch 科技新闻RSS源",
+=======
+			Name:        "新华每日电讯",
+			URL:         "https://feedx.net/rss/mrdx.xml",
+			Category:    "时政新闻",
+			Language:    "zh",
+			IsActive:    true,
+			Description: "新华每日电讯全文RSS源，提供权威时政和社会新闻",
+>>>>>>> 2a48be314c5676635d9608a5e0bc9cac425846e0
 			Priority:    1,
 			UpdateFreq:  60,
 		},
 		{
+<<<<<<< HEAD
 			Name:        "Hacker News",
 			URL:         "https://hnrss.org/frontpage",
 			Category:    "科技",
 			Language:    "en",
 			IsActive:    true,
 			Description: "Hacker News 前端页面RSS源",
+=======
+			Name:        "经济日报",
+			URL:         "https://feedx.net/rss/jingjiribao.xml",
+			Category:    "财经新闻",
+			Language:    "zh",
+			IsActive:    true,
+			Description: "经济日报全文RSS源，提供权威财经和经济政策新闻",
+>>>>>>> 2a48be314c5676635d9608a5e0bc9cac425846e0
 			Priority:    1,
 			UpdateFreq:  60,
 		},
 		{
+<<<<<<< HEAD
 			Name:        "Reuters World News",
 			URL:         "https://feeds.reuters.com/reuters/worldNews",
 			Category:    "国际新闻",
 			Language:    "en",
 			IsActive:    true,
 			Description: "路透社世界新闻RSS源",
+=======
+			Name:        "南方周末",
+			URL:         "https://feedx.net/rss/infzm.xml",
+			Category:    "时政新闻",
+			Language:    "zh",
+			IsActive:    true,
+			Description: "南方周末全文RSS源，提供权威时政和社会新闻",
+			Priority:    1,
+			UpdateFreq:  60,
+		},
+		{
+			Name:        "凤凰军事",
+			URL:         "https://feedx.net/rss/ifengmil.xml",
+			Category:    "军事新闻",
+			Language:    "zh",
+			IsActive:    true,
+			Description: "凤凰军事全文RSS源，提供权威时政和军事新闻",
+			Priority:    1,
+			UpdateFreq:  60,
+		},
+		{
+			Name:        "3dmgame",
+			URL:         "https://feedx.net/rss/3dmgame.xml",
+			Category:    "游戏新闻",
+			Language:    "zh",
+			IsActive:    true,
+			Description: "3dmgame全文RSS源，提供权威游戏新闻",
+>>>>>>> 2a48be314c5676635d9608a5e0bc9cac425846e0
 			Priority:    1,
 			UpdateFreq:  60,
 		},
@@ -411,24 +476,192 @@ func (s *SeedService) SeedCompleteData() error {
 	return nil
 }
 
+// SeedExampleUsers 创建示例用户
+func (s *SeedService) SeedExampleUsers() error {
+	if s.db == nil {
+		return errors.New("database connection not initialized")
+	}
+
+	log.Println("开始创建示例用户...")
+
+	// 检查是否已经存在示例用户
+	var userCount int64
+	if err := s.db.Model(&models.User{}).Where("role = ?", "user").Count(&userCount).Error; err != nil {
+		return fmt.Errorf("failed to check existing users count: %w", err)
+	}
+
+	log.Printf("数据库中当前有 %d 个普通用户", userCount)
+
+	// 定义示例用户数据
+	exampleUsers := []models.User{
+		{
+			Username:  "zhangsan",
+			Email:     "zhangsan@example.com",
+			Password:  "password123",
+			Avatar:    "https://api.dicebear.com/7.x/avataaars/svg?seed=zhangsan",
+			Phone:     "13800138001",
+			Location:  "北京市",
+			Bio:       "热爱科技新闻的用户，关注AI和互联网发展趋势",
+			Interests: `["科技", "人工智能", "互联网", "创业"]`,
+			Role:      "user",
+			Status:    "active",
+		},
+		{
+			Username:  "lisi",
+			Email:     "lisi@example.com",
+			Password:  "password123",
+			Avatar:    "https://api.dicebear.com/7.x/avataaars/svg?seed=lisi",
+			Phone:     "13800138002",
+			Location:  "上海市",
+			Bio:       "财经分析师，专注投资理财和市场动态",
+			Interests: `["财经", "投资", "股票", "基金"]`,
+			Role:      "user",
+			Status:    "active",
+		},
+		{
+			Username:  "wangwu",
+			Email:     "wangwu@example.com",
+			Password:  "password123",
+			Avatar:    "https://api.dicebear.com/7.x/avataaars/svg?seed=wangwu",
+			Phone:     "13800138003",
+			Location:  "广州市",
+			Bio:       "体育爱好者，关注国内外体育赛事和健身资讯",
+			Interests: `["体育", "足球", "篮球", "健身"]`,
+			Role:      "user",
+			Status:    "active",
+		},
+		{
+			Username:  "zhaoliu",
+			Email:     "zhaoliu@example.com",
+			Password:  "password123",
+			Avatar:    "https://api.dicebear.com/7.x/avataaars/svg?seed=zhaoliu",
+			Phone:     "13800138004",
+			Location:  "深圳市",
+			Bio:       "娱乐达人，热衷明星动态和影视资讯",
+			Interests: `["娱乐", "电影", "音乐", "明星"]`,
+			Role:      "user",
+			Status:    "active",
+		},
+		{
+			Username:  "qianqi",
+			Email:     "qianqi@example.com",
+			Password:  "password123",
+			Avatar:    "https://api.dicebear.com/7.x/avataaars/svg?seed=qianqi",
+			Phone:     "13800138005",
+			Location:  "杭州市",
+			Bio:       "教育工作者，关注教育政策和学术研究",
+			Interests: `["教育", "学术", "政策", "科研"]`,
+			Role:      "user",
+			Status:    "active",
+		},
+		{
+			Username:  "sunba",
+			Email:     "sunba@example.com",
+			Password:  "password123",
+			Avatar:    "https://api.dicebear.com/7.x/avataaars/svg?seed=sunba",
+			Phone:     "13800138006",
+			Location:  "成都市",
+			Bio:       "旅游博主，分享各地美食和旅行攻略",
+			Interests: `["旅游", "美食", "摄影", "文化"]`,
+			Role:      "user",
+			Status:    "active",
+		},
+		{
+			Username:  "zhoujiu",
+			Email:     "zhoujiu@example.com",
+			Password:  "password123",
+			Avatar:    "https://api.dicebear.com/7.x/avataaars/svg?seed=zhoujiu",
+			Phone:     "13800138007",
+			Location:  "西安市",
+			Bio:       "游戏玩家，关注游戏行业动态和电竞赛事",
+			Interests: `["游戏", "电竞", "动漫", "科技"]`,
+			Role:      "user",
+			Status:    "active",
+		},
+		{
+			Username:  "wuzshi",
+			Email:     "wushi@example.com",
+			Password:  "password123",
+			Avatar:    "https://api.dicebear.com/7.x/avataaars/svg?seed=wushi",
+			Phone:     "13800138008",
+			Location:  "南京市",
+			Bio:       "健康生活倡导者，关注医疗健康和养生资讯",
+			Interests: `["健康", "医疗", "养生", "运动"]`,
+			Role:      "user",
+			Status:    "active",
+		},
+	}
+
+	// 批量创建示例用户
+	createdCount := 0
+	skippedCount := 0
+
+	for _, user := range exampleUsers {
+		// 检查用户名和邮箱是否已存在
+		var existingUser models.User
+		err := s.db.Where("username = ? OR email = ?", user.Username, user.Email).First(&existingUser).Error
+		if err == nil {
+			skippedCount++
+			log.Printf("跳过重复用户：%s", user.Username)
+			continue
+		} else if err != gorm.ErrRecordNotFound {
+			log.Printf("检查用户时出错：%v", err)
+			continue
+		}
+
+		// 验证用户数据
+		if !utils.IsValidEmail(user.Email) {
+			log.Printf("用户 %s 邮箱格式无效，跳过", user.Username)
+			continue
+		}
+
+		if !utils.IsValidPassword(user.Password) {
+			log.Printf("用户 %s 密码格式无效，跳过", user.Username)
+			continue
+		}
+
+		if !utils.IsValidUsername(user.Username) {
+			log.Printf("用户 %s 用户名格式无效，跳过", user.Username)
+			continue
+		}
+
+		// 创建用户
+		if err := s.db.Create(&user).Error; err != nil {
+			log.Printf("创建用户 %s 失败：%v", user.Username, err)
+			continue
+		}
+
+		createdCount++
+		log.Printf("成功创建示例用户：%s (%s)", user.Username, user.Email)
+	}
+
+	log.Printf("示例用户创建完成！成功创建 %d 个用户，跳过 %d 个重复用户", createdCount, skippedCount)
+	return nil
+}
+
 /*
 使用示例：
 
 // 1. 基本使用
 seedService := NewSeedService()
-err := seedService.SeedAllData() // 导入新闻和基础数据
+err := seedService.SeedAllData() // 导入新闻、管理员和示例用户
 
 // 2. 仅导入新闻数据
 seedService := NewSeedService()
 err := seedService.SeedNewsFromJSON("data/news.json")
 
-// 3. 完整初始化
+// 3. 仅创建示例用户
+seedService := NewSeedService()
+err := seedService.SeedExampleUsers()
+
+// 4. 完整初始化
 seedService := NewSeedService()
 err := seedService.SeedCompleteData()
 
 注意事项：
 1. 所有数据导入都会进行去重检查
 2. 管理员账户信息可以通过环境变量配置
-3. 支持批量插入提高性能
-4. 所有操作都有详细的日志记录
+3. 示例用户包含多种兴趣类型和地理分布
+4. 支持批量插入提高性能
+5. 所有操作都有详细的日志记录
 */
