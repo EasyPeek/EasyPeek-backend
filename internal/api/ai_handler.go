@@ -275,29 +275,27 @@ func (h *AIHandler) GetAnalysisStats(c *gin.Context) {
 // @Failure      500  {object}  utils.ErrorResponse
 // @Router       /news/{id}/summarize [post]
 func (h *AIHandler) SummarizeNews(c *gin.Context) {
-<<<<<<< HEAD
 	var req struct {
-		NewsID uint `json:"news_id" binding:"required"`
+		NewsID uint `json:"news_id"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "请求参数无效", err.Error())
-=======
-	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 64)
-	if err != nil {
-		utils.BadRequest(c, "Invalid news ID")
->>>>>>> 2a48be314c5676635d9608a5e0bc9cac425846e0
+	// 优先从 JSON 里读取
+	if err := c.ShouldBindJSON(&req); err != nil || req.NewsID == 0 {
+		// 如果 JSON 无效，尝试从 URL 参数获取
+		idStr := c.Param("id")
+		id, err := strconv.ParseUint(idStr, 10, 64)
+		if err != nil || id == 0 {
+			utils.BadRequest(c, "Invalid news ID")
+			return
+		}
+		req.NewsID = uint(id)
+
 		return
 	}
 
 	news, err := h.newsService.GetNewsByID(req.NewsID)
 	if err != nil {
-<<<<<<< HEAD
-		utils.ErrorResponse(c, http.StatusNotFound, "新闻未找到", err.Error())
-=======
 		utils.NotFound(c, "News not found")
->>>>>>> 2a48be314c5676635d9608a5e0bc9cac425846e0
 		return
 	}
 
@@ -310,11 +308,9 @@ func (h *AIHandler) SummarizeNews(c *gin.Context) {
 
 	analysis, err := h.aiService.AnalyzeNews(news.ID, analysisReq)
 	if err != nil {
-<<<<<<< HEAD
-		utils.ErrorResponse(c, http.StatusInternalServerError, "总结生成失败", err.Error())
-=======
+
 		utils.InternalServerError(c, "Failed to generate summary")
->>>>>>> 2a48be314c5676635d9608a5e0bc9cac425846e0
+
 		return
 	}
 

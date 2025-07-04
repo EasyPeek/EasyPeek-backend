@@ -32,7 +32,7 @@ admin:
 # AI服务配置
 ai:
   provider: "openrouter"
-  api_key: "" # 推荐留空，实际运行时用环境变量注入 EASYPEEK_AI_API_KEY
+  api_key: "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"
   base_url: "https://openrouter.ai/api/v1"
   model: "google/gemini-2.0-flash-001" # 使用更稳定的thinking版本
   timeout: 30 
