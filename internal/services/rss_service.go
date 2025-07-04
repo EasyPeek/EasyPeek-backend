@@ -3,9 +3,14 @@ package services
 import (
 	"errors"
 	"fmt"
+	"html"
 	"log"
+	"math/rand"
+	"net/http"
+	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/EasyPeek/EasyPeek-backend/internal/database"
 	"github.com/EasyPeek/EasyPeek-backend/internal/models"
@@ -20,9 +25,28 @@ type RSSService struct {
 }
 
 func NewRSSService() *RSSService {
+	// 初始化随机数种子
+	rand.Seed(time.Now().UnixNano())
+
+	// 创建带有自定义HTTP客户端的解析器
+	parser := gofeed.NewParser()
+
+	// 设置自定义HTTP客户端，添加超时和User-Agent
+	client := &http.Client{
+		Timeout: 30 * time.Second, // 30秒超时
+		Transport: &http.Transport{
+			MaxIdleConns:       10,
+			IdleConnTimeout:    30 * time.Second,
+			DisableCompression: false,
+		},
+	}
+
+	parser.Client = client
+	parser.UserAgent = "EasyPeek/1.0 RSS Reader (Mozilla/5.0 compatible)"
+
 	return &RSSService{
 		db:     database.GetDB(),
-		parser: gofeed.NewParser(),
+		parser: parser,
 	}
 }
 
@@ -210,7 +234,7 @@ func (s *RSSService) DeleteRSSSource(id uint) error {
 	return nil
 }
 
-// FetchRSSFeed 抓取单个RSS源的内容
+// FetchRSSFeed 抓取单个RSS源的内容（带重试机制）
 func (s *RSSService) FetchRSSFeed(sourceID uint) (*models.RSSFetchStats, error) {
 	log.Printf("[RSS DEBUG] Starting to fetch RSS feed for source ID: %d", sourceID)
 
@@ -234,13 +258,18 @@ func (s *RSSService) FetchRSSFeed(sourceID uint) (*models.RSSFetchStats, error) 
 		FetchTime:  startTime,
 	}
 
-	// 解析RSS feed
-	log.Printf("[RSS DEBUG] Parsing RSS feed from URL: %s", source.URL)
-	feed, err := s.parser.ParseURL(source.URL)
+	// 解析RSS feed（带重试机制）
+	feed, err := s.fetchRSSWithRetry(source.URL, 3)
 	if err != nil {
-		log.Printf("[RSS ERROR] Failed to parse RSS feed %s: %v", source.URL, err)
+		log.Printf("[RSS ERROR] Failed to parse RSS feed %s after retries: %v", source.URL, err)
 		// 增加错误计数
 		s.db.Model(&source).UpdateColumn("error_count", gorm.Expr("error_count + 1"))
+
+		// 如果错误次数过多，可以考虑暂时禁用该源
+		if source.ErrorCount >= 10 {
+			log.Printf("[RSS WARNING] RSS source %s has too many errors (%d), consider reviewing", source.Name, source.ErrorCount+1)
+		}
+
 		return nil, fmt.Errorf("failed to parse RSS feed: %v", err)
 	}
 
@@ -249,34 +278,87 @@ func (s *RSSService) FetchRSSFeed(sourceID uint) (*models.RSSFetchStats, error) 
 	stats.TotalItems = len(feed.Items)
 
 	// 处理每个新闻条目
-	for _, item := range feed.Items {
+	for i, item := range feed.Items {
+		log.Printf("[RSS DEBUG] Processing item %d/%d: %s", i+1, len(feed.Items), item.Title)
+
 		newsItem, isNew, err := s.processNewsItem(&source, item)
 		if err != nil {
-			log.Printf("Error processing news item: %v", err)
+			log.Printf("[RSS ERROR] Error processing news item '%s': %v", item.Title, err)
 			stats.ErrorItems++
 			continue
 		}
 
 		if isNew {
 			stats.NewItems++
+			log.Printf("[RSS DEBUG] Created new news item: %s", item.Title)
 		} else {
 			stats.UpdatedItems++
+			log.Printf("[RSS DEBUG] Updated existing news item: %s", item.Title)
 		}
 
 		// 自动计算热度
 		if newsItem != nil {
-			s.calculateNewsHotness(newsItem.ID)
+			if err := s.calculateNewsHotness(newsItem.ID); err != nil {
+				log.Printf("[RSS WARNING] Failed to calculate hotness for news item %d: %v", newsItem.ID, err)
+			}
 		}
 	}
 
 	// 更新RSS源统计信息
-	s.db.Model(&source).Updates(map[string]interface{}{
+	updateData := map[string]interface{}{
 		"last_fetched": time.Now(),
 		"fetch_count":  gorm.Expr("fetch_count + 1"),
-	})
+	}
+
+	// 如果这次抓取成功，重置错误计数
+	if stats.ErrorItems < len(feed.Items)/2 { // 如果错误条目少于总数的一半
+		updateData["error_count"] = 0
+	}
+
+	s.db.Model(&source).Updates(updateData)
 
 	stats.Duration = time.Since(startTime).String()
+	log.Printf("[RSS DEBUG] RSS fetch completed for %s: %d new, %d updated, %d errors in %s",
+		source.Name, stats.NewItems, stats.UpdatedItems, stats.ErrorItems, stats.Duration)
+
 	return stats, nil
+}
+
+// fetchRSSWithRetry 带重试机制的RSS抓取
+func (s *RSSService) fetchRSSWithRetry(url string, maxRetries int) (*gofeed.Feed, error) {
+	var lastError error
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		log.Printf("[RSS DEBUG] Attempting to fetch RSS from %s (attempt %d/%d)", url, attempt, maxRetries)
+
+		feed, err := s.parser.ParseURL(url)
+		if err == nil {
+			log.Printf("[RSS DEBUG] Successfully fetched RSS from %s on attempt %d", url, attempt)
+			return feed, nil
+		}
+
+		lastError = err
+		log.Printf("[RSS WARNING] Attempt %d failed for %s: %v", attempt, url, err)
+
+		// 检查错误类型
+		if strings.Contains(err.Error(), "timeout") {
+			log.Printf("[RSS WARNING] Timeout error for %s, will retry", url)
+		} else if strings.Contains(err.Error(), "no such host") || strings.Contains(err.Error(), "connection refused") {
+			log.Printf("[RSS WARNING] Network error for %s: %v", url, err)
+		} else if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "403") {
+			log.Printf("[RSS WARNING] HTTP error for %s: %v, will not retry", url, err)
+			break // 不重试HTTP错误
+		}
+
+		// 等待后重试（指数退避）
+		if attempt < maxRetries {
+			waitTime := time.Duration(attempt) * 2 * time.Second
+			log.Printf("[RSS DEBUG] Waiting %v before retry...", waitTime)
+			time.Sleep(waitTime)
+		}
+	}
+
+	return nil, fmt.Errorf("failed after %d attempts, last error: %v", maxRetries, lastError)
 }
 
 // FetchAllRSSFeeds 抓取所有活跃RSS源的内容
@@ -319,6 +401,78 @@ func (s *RSSService) FetchAllRSSFeeds() (*models.RSSFetchResult, error) {
 	}
 
 	return result, nil
+}
+
+// generateNewsStats 为新闻生成合理的统计数据
+func (s *RSSService) generateNewsStats(publishedAt time.Time, source *models.RSSSource) (int64, int64, int64, int64, float64) {
+	// 根据发布时间计算时间权重（越新的新闻基础数据越低）
+	now := time.Now()
+	hoursOld := now.Sub(publishedAt).Hours()
+
+	// 时间权重：0-24小时内权重最低，随时间增加
+	timeWeight := 1.0
+	if hoursOld <= 24 {
+		timeWeight = 0.3 + (hoursOld / 24 * 0.4) // 0.3-0.7
+	} else if hoursOld <= 168 { // 一周内
+		timeWeight = 0.7 + ((hoursOld - 24) / 144 * 0.3) // 0.7-1.0
+	} else {
+		timeWeight = 1.0 + (hoursOld-168)/168*0.5 // 1.0-1.5
+	}
+
+	// 根据RSS源的重要性调整基础权重
+	sourceWeight := 1.0
+	switch source.Priority {
+	case 1, 2: // 高优先级源
+		sourceWeight = 1.2
+	case 3, 4: // 中优先级源
+		sourceWeight = 1.0
+	default: // 低优先级源
+		sourceWeight = 0.8
+	}
+
+	// 生成基础统计数据
+	baseViews := int64(rand.Intn(200) + 50) // 50-250 基础浏览量
+	viewCount := int64(float64(baseViews) * timeWeight * sourceWeight)
+
+	// 点赞数约为浏览量的 3-8%
+	likeRate := 0.03 + rand.Float64()*0.05 // 3%-8%
+	likeCount := int64(float64(viewCount) * likeRate)
+
+	// 评论数约为浏览量的 0.5-2%
+	commentRate := 0.005 + rand.Float64()*0.015 // 0.5%-2%
+	commentCount := int64(float64(viewCount) * commentRate)
+
+	// 分享数约为浏览量的 1-3%
+	shareRate := 0.01 + rand.Float64()*0.02 // 1%-3%
+	shareCount := int64(float64(viewCount) * shareRate)
+
+	// 计算热度分数 (0-10分)
+	hotnessScore := float64(viewCount)*0.001 +
+		float64(likeCount)*0.01 +
+		float64(commentCount)*0.05 +
+		float64(shareCount)*0.02
+
+	// 添加时间衰减
+	if hoursOld <= 24 {
+		hotnessScore *= 1.5 // 24小时内热度加成
+	} else if hoursOld <= 168 {
+		hotnessScore *= (1.5 - (hoursOld-24)/144*0.5) // 逐渐衰减
+	} else {
+		hotnessScore *= 1.0 - (hoursOld-168)/168*0.3 // 继续衰减
+	}
+
+	// 限制热度分数在0-10之间
+	if hotnessScore > 10 {
+		hotnessScore = 10
+	}
+	if hotnessScore < 0 {
+		hotnessScore = 0
+	}
+
+	log.Printf("[RSS DEBUG] Generated stats for news - Views: %d, Likes: %d, Comments: %d, Shares: %d, Hotness: %.2f",
+		viewCount, likeCount, commentCount, shareCount, hotnessScore)
+
+	return viewCount, likeCount, commentCount, shareCount, hotnessScore
 }
 
 // processNewsItem 处理单个新闻条目
@@ -368,67 +522,225 @@ func (s *RSSService) processNewsItem(source *models.RSSSource, item *gofeed.Item
 	// 提取作者信息
 	author := ""
 	if item.Author != nil {
-		author = item.Author.Name
+		author = s.cleanUTF8(item.Author.Name)
 	}
 
 	// 提取分类
 	categories := make([]string, 0)
 	for _, cat := range item.Categories {
-		categories = append(categories, cat)
+		categories = append(categories, s.cleanUTF8(cat))
 	}
 	categoryStr := strings.Join(categories, ",")
 	if categoryStr == "" {
 		categoryStr = source.Category
 	}
 
-	// 更新或创建新闻条目
-	newsItem := models.News{
-		RSSSourceID: &source.ID,
-		SourceType:  models.NewsTypeRSS,
-		Title:       item.Title,
-		Link:        item.Link,
-		Description: item.Description,
-		Content:     item.Content,
-		Author:      author,
-		Category:    categoryStr,
-		Tags:        utils.SliceToJSON(categories),
-		PublishedAt: publishedAt,
-		GUID:        identifier,
-		ImageURL:    imageURL,
-		Status:      "published",
-		IsProcessed: false,
-		Source:      source.Name,
-		Language:    source.Language,
-		IsActive:    true,
+	// 处理内容字段 - 优先使用Content，如果为空则使用Description
+	content := item.Content
+	if content == "" && item.Description != "" {
+		content = item.Description
+		log.Printf("[RSS DEBUG] Using description as content for item: %s", item.Title)
 	}
 
+	// 清理所有文本字段的UTF-8编码
+	title := s.cleanUTF8(item.Title)
+	description := s.cleanUTF8(item.Description)
+	content = s.cleanUTF8(content)
+	link := s.cleanUTF8(item.Link)
+	guid := s.cleanUTF8(identifier)
+
+	// 提取摘要 - 从Description或Content中提取前200个字符作为摘要
+	summary := ""
+	if description != "" {
+		summary = s.extractSummary(description, 200)
+	} else if content != "" {
+		summary = s.extractSummary(content, 200)
+	}
+
+	// 生成或补充统计数据
+	var viewCount, likeCount, commentCount, shareCount int64
+	var hotnessScore float64
+
 	if isNew {
-		newsItem.ID = 0 // 确保是新记录
-		log.Printf("[RSS DEBUG] Creating new news item: %s", newsItem.Title)
+		// 新新闻：生成完整的统计数据
+		viewCount, likeCount, commentCount, shareCount, hotnessScore = s.generateNewsStats(publishedAt, source)
+		log.Printf("[RSS DEBUG] Generated stats for new news: %s", title)
+	} else {
+		// 现有新闻：检查是否需要补充统计数据
+		viewCount = existingItem.ViewCount
+		likeCount = existingItem.LikeCount
+		commentCount = existingItem.CommentCount
+		shareCount = existingItem.ShareCount
+		hotnessScore = existingItem.HotnessScore
+
+		// 如果统计数据为0或过低，生成合理的数据
+		if viewCount == 0 && likeCount == 0 && commentCount == 0 {
+			log.Printf("[RSS DEBUG] Existing news has no stats, generating new stats for: %s", title)
+			viewCount, likeCount, commentCount, shareCount, hotnessScore = s.generateNewsStats(publishedAt, source)
+		} else if viewCount < 10 && time.Since(publishedAt).Hours() > 24 {
+			// 如果发布超过24小时但浏览量还很低，适当补充一些数据
+			log.Printf("[RSS DEBUG] Boosting low stats for older news: %s", title)
+			additionalViews, additionalLikes, additionalComments, additionalShares, newHotness := s.generateNewsStats(publishedAt, source)
+
+			// 增加一些数据，但不要完全替换
+			viewCount += additionalViews / 3
+			likeCount += additionalLikes / 3
+			commentCount += additionalComments / 3
+			shareCount += additionalShares / 3
+
+			// 重新计算热度
+			hotnessScore = newHotness
+		}
+	}
+
+	// 更新或创建新闻条目
+	newsItem := models.News{
+		RSSSourceID:  &source.ID,
+		SourceType:   models.NewsTypeRSS,
+		Title:        title,
+		Link:         link,
+		Description:  description,
+		Content:      content,
+		Summary:      summary,
+		Author:       author,
+		Category:     categoryStr,
+		Tags:         utils.SliceToJSON(categories),
+		PublishedAt:  publishedAt,
+		GUID:         guid,
+		ImageURL:     imageURL,
+		Status:       "published",
+		IsProcessed:  false,
+		Source:       source.Name,
+		Language:     source.Language,
+		IsActive:     true,
+		ViewCount:    viewCount,
+		LikeCount:    likeCount,
+		CommentCount: commentCount,
+		ShareCount:   shareCount,
+		HotnessScore: hotnessScore,
+	}
+
+	// 保存到数据库
+	if isNew {
+		log.Printf("[RSS DEBUG] Creating new news item: %s", title)
 		if err := s.db.Create(&newsItem).Error; err != nil {
 			log.Printf("[RSS ERROR] Failed to create news item: %v", err)
 			return nil, false, err
 		}
-		log.Printf("[RSS DEBUG] Successfully created news item with ID: %d", newsItem.ID)
 	} else {
-		// 更新现有记录
-		newsItem.ID = existingItem.ID
-		newsItem.ViewCount = existingItem.ViewCount
-		newsItem.LikeCount = existingItem.LikeCount
-		newsItem.CommentCount = existingItem.CommentCount
-		newsItem.ShareCount = existingItem.ShareCount
-		newsItem.HotnessScore = existingItem.HotnessScore
-		newsItem.CreatedBy = existingItem.CreatedBy
+		log.Printf("[RSS DEBUG] Updating existing news item: %s", title)
+		// 更新现有条目
+		existingItem.Title = title
+		existingItem.Description = description
+		existingItem.Content = content
+		existingItem.Summary = summary
+		existingItem.Author = author
+		existingItem.Category = categoryStr
+		existingItem.Tags = utils.SliceToJSON(categories)
+		existingItem.PublishedAt = publishedAt
+		existingItem.ImageURL = imageURL
+		existingItem.Source = source.Name
+		existingItem.Language = source.Language
+		existingItem.IsActive = true
 
-		log.Printf("[RSS DEBUG] Updating existing news item ID: %d", newsItem.ID)
-		if err := s.db.Save(&newsItem).Error; err != nil {
+		// 更新统计数据（如果生成了新的数据）
+		existingItem.ViewCount = viewCount
+		existingItem.LikeCount = likeCount
+		existingItem.CommentCount = commentCount
+		existingItem.ShareCount = shareCount
+		existingItem.HotnessScore = hotnessScore
+
+		if err := s.db.Save(&existingItem).Error; err != nil {
 			log.Printf("[RSS ERROR] Failed to update news item: %v", err)
 			return nil, false, err
 		}
-		log.Printf("[RSS DEBUG] Successfully updated news item ID: %d", newsItem.ID)
+		newsItem = existingItem
 	}
 
 	return &newsItem, isNew, nil
+}
+
+// cleanUTF8 清理字符串中的无效UTF-8字符
+func (s *RSSService) cleanUTF8(text string) string {
+	if text == "" {
+		return text
+	}
+
+	// 如果已经是有效的UTF-8，直接返回
+	if utf8.ValidString(text) {
+		return text
+	}
+
+	// 清理无效的UTF-8字符
+	cleaned := make([]rune, 0, len(text))
+	for _, r := range text {
+		if r != utf8.RuneError {
+			cleaned = append(cleaned, r)
+		}
+	}
+
+	result := string(cleaned)
+
+	// 如果清理后仍然无效，则进行更严格的清理
+	if !utf8.ValidString(result) {
+		// 使用更严格的方法：逐字节检查
+		var buffer strings.Builder
+		for i, width := 0, 0; i < len(text); i += width {
+			r, w := utf8.DecodeRuneInString(text[i:])
+			if r == utf8.RuneError && w == 1 {
+				// 跳过无效字符
+				width = 1
+				continue
+			}
+			buffer.WriteRune(r)
+			width = w
+		}
+		result = buffer.String()
+	}
+
+	return result
+}
+
+// extractSummary 从HTML内容中提取纯文本摘要（改进版）
+func (s *RSSService) extractSummary(htmlContent string, maxLength int) string {
+	if htmlContent == "" {
+		return ""
+	}
+
+	// 先清理UTF-8编码
+	content := s.cleanUTF8(htmlContent)
+
+	// 解码HTML实体
+	content = html.UnescapeString(content)
+
+	// 移除HTML标签
+	re := regexp.MustCompile(`<[^>]*>`)
+	text := re.ReplaceAllString(content, "")
+
+	// 移除多余的空白字符
+	text = regexp.MustCompile(`\s+`).ReplaceAllString(text, " ")
+	text = strings.TrimSpace(text)
+
+	// 再次清理UTF-8编码（以防HTML解码引入了无效字符）
+	text = s.cleanUTF8(text)
+
+	// 截取指定长度
+	if len(text) > maxLength {
+		// 按字符截取，而不是按字节
+		runes := []rune(text)
+		if len(runes) > maxLength {
+			text = string(runes[:maxLength])
+
+			// 尝试在单词或句子边界截断
+			if lastSpace := strings.LastIndex(text, " "); lastSpace > maxLength/2 {
+				text = text[:lastSpace]
+			}
+
+			text = strings.TrimSpace(text) + "..."
+		}
+	}
+
+	return text
 }
 
 // GetNews 获取新闻列表
