@@ -49,6 +49,7 @@ func main() {
 		&models.Event{},
 		&models.RSSSource{},
 		&models.Comment{},
+		&models.CommentLike{},
 		&models.Message{},
 		&models.Follow{},
 	); err != nil {

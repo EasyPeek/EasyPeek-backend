@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"errors"
+
 	"github.com/EasyPeek/EasyPeek-backend/internal/database"
 	"github.com/EasyPeek/EasyPeek-backend/internal/models"
 	"github.com/EasyPeek/EasyPeek-backend/internal/utils"
@@ -20,7 +21,7 @@ const (
 
 const userContextKey = "user"
 
-// AuthMiddleware 基础认证中间件，验证JWT
+// AuthMiddleware 基础认证中间件
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -37,7 +38,33 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// 将基础信息存储到context中
+		c.Set("user_id", claims.UserID)
+		c.Set("username", claims.Username)
+		c.Set("role", claims.Role)
+
+		c.Next()
+	}
+}
+
+// OptionalAuthMiddleware 可选认证中间件
+// 如果有有效的token，会设置用户信息；如果没有token或token无效，不会中断请求
+func OptionalAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			// 没有token，继续处理请求
+			c.Next()
+			return
+		}
+
+		claims, err := utils.ParseToken(authHeader)
+		if err != nil {
+			// token无效，但不中断请求，继续处理
+			c.Next()
+			return
+		}
+
+		// token有效，设置用户信息
 		c.Set("user_id", claims.UserID)
 		c.Set("username", claims.Username)
 		c.Set("role", claims.Role)

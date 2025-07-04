@@ -9,9 +9,9 @@ import (
 // Follow 关注模型 - 用户关注事件
 type Follow struct {
 	ID           uint           `json:"id" gorm:"primaryKey"`
-	UserID       uint           `json:"user_id" gorm:"not null;index"`      // 关注者ID
-	EventID      uint           `json:"event_id" gorm:"not null;index"`     // 关注的事件ID
-	FollowType   string         `json:"follow_type" gorm:"not null;default:'event'"` // 关注类型，默认为event
+	UserID       uint           `json:"user_id" gorm:"not null;index"`                 // 关注者ID
+	EventID      uint           `json:"event_id" gorm:"not null;index"`                // 关注的事件ID
+	FollowType   string         `json:"follow_type" gorm:"not null;default:'event'"`   // 关注类型，默认为event
 	FollowTarget string         `json:"follow_target" gorm:"not null;default:'event'"` // 关注目标，默认为event
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`

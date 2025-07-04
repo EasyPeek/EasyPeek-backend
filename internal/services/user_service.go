@@ -111,42 +111,6 @@ func (s *UserService) GetUserByID(id uint) (*models.User, error) {
 	return &user, nil
 }
 
-// get user by username
-func (s *UserService) GetUserByUsername(username string) (*models.User, error) {
-	var user models.User
-	// check if database connection is initialized
-	if s.db == nil {
-		return nil, errors.New("database connection not initialized")
-	}
-
-	// get user by username
-	if err := s.db.Where("username = ?", username).First(&user).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("user not found")
-		}
-		return nil, err
-	}
-	return &user, nil
-}
-
-// get user by email
-func (s *UserService) GetUserByEmail(email string) (*models.User, error) {
-	var user models.User
-	// check if database connection is initialized
-	if s.db == nil {
-		return nil, errors.New("database connection not initialized")
-	}
-
-	// get user by email
-	if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("user not found")
-		}
-		return nil, err
-	}
-	return &user, nil
-}
-
 // update user
 func (s *UserService) UpdateUser(user *models.User) error {
 	// check if database connection is initialized
@@ -158,21 +122,29 @@ func (s *UserService) UpdateUser(user *models.User) error {
 	return s.db.Save(user).Error
 }
 
-// delete user
-func (s *UserService) DeleteUser(id uint) error {
-	// check if database connection is initialized
+// SoftDeleteUser
+func (s *UserService) SoftDeleteUser(userID uint) error {
 	if s.db == nil {
 		return errors.New("database connection not initialized")
 	}
 
-	// delete user
-	result := s.db.Delete(&models.User{}, id)
-	if result.Error != nil {
-		return result.Error
+	var user models.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("user not found")
+		}
+		return err
 	}
-	if result.RowsAffected == 0 {
-		return errors.New("user not found")
+
+	if user.Status == "deleted" {
+		return errors.New("user account is already deleted")
 	}
+
+	user.Status = "deleted"
+	if err := s.db.Save(&user).Error; err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -197,36 +169,6 @@ func (s *UserService) GetAllUsers(page, pageSize int) ([]models.User, int64, err
 	}
 
 	return users, total, nil
-}
-
-// SoftDeleteUser 软删除用户账户（用户自删除）
-func (s *UserService) SoftDeleteUser(userID uint) error {
-	// check if database connection is initialized
-	if s.db == nil {
-		return errors.New("database connection not initialized")
-	}
-
-	// 获取用户信息
-	var user models.User
-	if err := s.db.First(&user, userID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("user not found")
-		}
-		return err
-	}
-
-	// 检查用户是否已经被删除
-	if user.Status == "deleted" {
-		return errors.New("user account is already deleted")
-	}
-
-	// 软删除：更新状态为 deleted
-	user.Status = "deleted"
-	if err := s.db.Save(&user).Error; err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // GetActiveUsers 获取所有活跃用户（排除已删除的用户）

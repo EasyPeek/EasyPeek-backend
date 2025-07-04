@@ -8,20 +8,20 @@ import (
 )
 
 type User struct {
-	ID          uint           `json:"id" gorm:"primaryKey"`
-	Username    string         `json:"username" gorm:"uniqueIndex;not null"`
-	Email       string         `json:"email" gorm:"uniqueIndex;not null"`
-	Password    string         `json:"password" gorm:"not null"`
-	Avatar      string         `json:"avatar"`
-	Phone       string         `json:"phone"`
-	Location    string         `json:"location"`
-	Bio         string         `json:"bio"`
-	Interests   string         `json:"interests"` // JSON字符串存储兴趣偏好数组
-	Role        string         `json:"role" gorm:"default:user"`
-	Status      string         `json:"status" gorm:"default:active"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
+	ID        uint           `json:"id" gorm:"primaryKey"`
+	Username  string         `json:"username" gorm:"uniqueIndex;not null"`
+	Email     string         `json:"email" gorm:"uniqueIndex;not null"`
+	Password  string         `json:"password" gorm:"not null"`
+	Avatar    string         `json:"avatar"`
+	Phone     string         `json:"phone"`
+	Location  string         `json:"location"`
+	Bio       string         `json:"bio"`
+	Interests string         `json:"interests"` // JSON字符串存储兴趣偏好数组
+	Role      string         `json:"role" gorm:"default:user"`
+	Status    string         `json:"status" gorm:"default:active"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 type UserResponse struct {
@@ -73,10 +73,9 @@ type UpdateUserStatusRequest struct {
 	Status string `json:"status" binding:"required,oneof=active inactive suspended deleted"`
 }
 
-// DeleteAccountRequest 删除账户请求
+// DeleteAccount
 type DeleteAccountRequest struct {
-	Password string `json:"password" binding:"required"` // 要求输入密码确认删除
-	Reason   string `json:"reason"`                      // 删除原因（可选）
+	Password string `json:"password" binding:"required"`
 }
 
 func (u *User) BeforeCreate(tx *gorm.DB) error {

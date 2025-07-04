@@ -25,10 +25,6 @@ type RSSService struct {
 }
 
 func NewRSSService() *RSSService {
-	// 初始化随机数种子
-	rand.Seed(time.Now().UnixNano())
-
-	// 创建带有自定义HTTP客户端的解析器
 	parser := gofeed.NewParser()
 
 	// 设置自定义HTTP客户端，添加超时和User-Agent

@@ -42,20 +42,20 @@ func SetupRoutes() *gin.Engine {
 		{
 			auth.POST("/register", userHandler.Register)
 			auth.POST("/login", userHandler.Login)
+			auth.POST("/logout", userHandler.Logout)
 
-			auth.POST("/admin-login", adminHandler.AdminLogin) // 管理员登录
-			// auth.POST("/refresh", userHandler.RefreshToken)  // TODO: 实现token刷新
-			// auth.POST("/logout", userHandler.Logout)         // TODO: 实现登出
+			auth.POST("/admin-login", adminHandler.AdminLogin)
+			auth.POST("/admin-logout", adminHandler.AdminLogout)
 		}
 
 		// user routes
 		user := v1.Group("/user")
 		user.Use(middleware.AuthMiddleware())
 		{
+
 			user.GET("/profile", userHandler.GetProfile)
 			user.PUT("/profile", userHandler.UpdateProfile)
 			user.POST("/change-password", userHandler.ChangePassword)
-			// 用户自删除账户
 			user.DELETE("/me", userHandler.DeleteSelf)
 		}
 
@@ -95,14 +95,17 @@ func SetupRoutes() *gin.Engine {
 			news.GET("/category/:category", newsHandler.GetNewsByCategory) // 按分类获取新闻
 			news.GET("/:id", newsHandler.GetNewsByID)                      // 根据ID获取单条新闻
 			news.GET("/search", newsHandler.SearchNews)                    // 搜索新闻
+			news.POST("/:id/view", newsHandler.IncrementNewsView)          // 增加浏览量
 
 			// 需要身份验证的路由
 			authNews := news.Group("")
 			authNews.Use(middleware.AuthMiddleware())
 			{
-				authNews.POST("", newsHandler.CreateNews)       // 创建新闻
-				authNews.PUT("/:id", newsHandler.UpdateNews)    // 更新新闻
-				authNews.DELETE("/:id", newsHandler.DeleteNews) // 删除新闻
+				authNews.POST("", newsHandler.CreateNews)                // 创建新闻
+				authNews.PUT("/:id", newsHandler.UpdateNews)             // 更新新闻
+				authNews.DELETE("/:id", newsHandler.DeleteNews)          // 删除新闻
+				authNews.POST("/:id/like", newsHandler.LikeNews)         // 点赞/取消点赞新闻
+				authNews.GET("/:id/like", newsHandler.GetNewsLikeStatus) // 获取点赞状态
 			}
 		}
 
@@ -111,9 +114,11 @@ func SetupRoutes() *gin.Engine {
 		{
 			// 公开路由
 			comments.GET("/:id", commentHandler.GetCommentByID)                // 根据ID获取单条评论
-			comments.GET("/news/:news_id", commentHandler.GetCommentsByNewsID) // 根据新闻ID获取评论列表
-			comments.GET("/user/:user_id", commentHandler.GetCommentsByUserID) // 根据用户ID获取评论列表
 			comments.POST("/anonymous", commentHandler.CreateAnonymousComment) // 创建匿名评论
+
+			// 支持可选认证的路由（已登录用户可以获取个人点赞状态）
+			comments.GET("/news/:news_id", middleware.OptionalAuthMiddleware(), commentHandler.GetCommentsByNewsID) // 根据新闻ID获取评论列表
+			comments.GET("/user/:user_id", middleware.OptionalAuthMiddleware(), commentHandler.GetCommentsByUserID) // 根据用户ID获取评论列表
 
 			// 需要身份验证的路由
 			authComments := comments.Group("")
@@ -205,12 +210,12 @@ func SetupRoutes() *gin.Engine {
 			// 用户管理
 			users := admin.Group("/users")
 			{
-				users.GET("", adminHandler.GetAllUsers)          // 获取所有用户（带过滤）
-				users.GET("/active", userHandler.GetActiveUsers) // 获取活跃用户（保持兼容）
-				users.GET("/:id", adminHandler.GetUserByID)      // 获取指定用户
+				users.GET("", adminHandler.GetAllUsers) // 获取所有用户（带过滤）
+				// users.GET("/active", userHandler.GetActiveUsers) // 获取活跃用户（保持兼容）
 
+				users.GET("/:id", adminHandler.GetUserByID)   // get user by ID
 				users.PUT("/:id", adminHandler.UpdateUser)    // 更新用户信息
-				users.DELETE("/:id", adminHandler.DeleteUser) // 管理员删除用户（硬删除）
+				users.DELETE("/:id", adminHandler.DeleteUser) // delete user
 				// 保留原有的单独角色和状态更新接口
 				// users.PUT("/:id/role", userHandler.UpdateUserRole)     // 更新用户角色
 				// users.PUT("/:id/status", userHandler.UpdateUserStatus) // 更新用户状态

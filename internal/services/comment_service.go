@@ -195,8 +195,8 @@ func (s *CommentService) GetCommentByID(id uint) (*models.Comment, error) {
 	}
 
 	var comment models.Comment
-	// 使用 First 方法根据主键ID查找评论
-	if err := s.db.First(&comment, id).Error; err != nil {
+	// 使用 First 方法根据主键ID查找评论，并预加载用户信息和点赞记录
+	if err := s.db.Preload("User").Preload("Likes").First(&comment, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("comment not found") // 如果记录未找到
 		}
@@ -206,7 +206,7 @@ func (s *CommentService) GetCommentByID(id uint) (*models.Comment, error) {
 }
 
 // GetCommentsByNewsID 根据新闻ID获取评论列表，支持分页
-func (s *CommentService) GetCommentsByNewsID(newsID uint, page, pageSize int) ([]models.Comment, int64, error) {
+func (s *CommentService) GetCommentsByNewsID(newsID uint, page, pageSize int, currentUserID *uint) ([]models.Comment, int64, error) {
 	// 检查数据库连接是否已初始化
 	if s.db == nil {
 		return nil, 0, errors.New("database connection not initialized")
@@ -215,8 +215,8 @@ func (s *CommentService) GetCommentsByNewsID(newsID uint, page, pageSize int) ([
 	var comments []models.Comment
 	var total int64
 
-	// 计算总记录数（包括所有评论和回复）
-	if err := s.db.Model(&models.Comment{}).Where("news_id = ?", newsID).Count(&total).Error; err != nil {
+	// 计算总记录数（只统计顶级评论，不包括回复）
+	if err := s.db.Model(&models.Comment{}).Where("news_id = ? AND parent_id IS NULL", newsID).Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("failed to count total comments: %w", err)
 	}
 
@@ -230,13 +230,14 @@ func (s *CommentService) GetCommentsByNewsID(newsID uint, page, pageSize int) ([
 	}
 
 	// 查询带分页的评论数据，按创建时间倒序排列，只获取顶级评论（没有父评论的）
-	if err := s.db.Where("news_id = ? AND parent_id IS NULL", newsID).
+	query := s.db.Where("news_id = ? AND parent_id IS NULL", newsID).
 		Preload("Replies", func(db *gorm.DB) *gorm.DB {
 			return db.Order("created_at ASC") // 回复按时间正序排列
-		}).Preload("Replies.User").Preload("User").
+		}).Preload("Replies.User").Preload("Replies.Likes").Preload("User").Preload("Likes").
 		Order("created_at desc").
-		Offset(offset).Limit(pageSize).
-		Find(&comments).Error; err != nil {
+		Offset(offset).Limit(pageSize)
+
+	if err := query.Find(&comments).Error; err != nil {
 		return nil, 0, fmt.Errorf("failed to get comments with pagination: %w", err)
 	}
 
@@ -273,6 +274,7 @@ func (s *CommentService) GetCommentsByUserID(userID uint, page, pageSize int) ([
 
 	// 查询带分页的评论数据，按创建时间倒序排列
 	if err := s.db.Where("user_id = ?", userID).
+		Preload("User").
 		Order("created_at desc").
 		Offset(offset).Limit(pageSize).
 		Find(&comments).Error; err != nil {
@@ -365,7 +367,8 @@ func (s *CommentService) GetAllComments(page, pageSize int) ([]models.Comment, i
 	}
 
 	// 查询带分页的评论数据
-	if err := s.db.Offset(offset).Limit(pageSize).Find(&comments).Error; err != nil {
+	if err := s.db.Preload("User").
+		Offset(offset).Limit(pageSize).Find(&comments).Error; err != nil {
 		return nil, 0, fmt.Errorf("failed to get all comments with pagination: %w", err)
 	}
 
@@ -397,13 +400,30 @@ func (s *CommentService) LikeComment(commentID uint, userID uint) error {
 		return fmt.Errorf("failed to check user existence: %w", err)
 	}
 
-	// 检查用户是否已经点赞过该评论（这里简化处理，实际可能需要一个点赞记录表）
-	// 由于没有点赞记录表，我们直接增加点赞数
-	// 在实际应用中，建议创建一个 comment_likes 表来记录用户点赞状态
+	// 检查用户是否已经点赞过该评论
+	var existingLike models.CommentLike
+	if err := s.db.Where("comment_id = ? AND user_id = ?", commentID, userID).First(&existingLike).Error; err == nil {
+		// 用户已经点赞过，返回错误
+		return errors.New("user has already liked this comment")
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		// 其他数据库错误
+		return fmt.Errorf("failed to check existing like: %w", err)
+	}
+
+	// 创建点赞记录
+	like := models.CommentLike{
+		CommentID: commentID,
+		UserID:    userID,
+		CreatedAt: time.Now(),
+	}
+
+	if err := s.db.Create(&like).Error; err != nil {
+		return fmt.Errorf("failed to create like record: %w", err)
+	}
 
 	// 增加评论的点赞数
 	if err := s.db.Model(&comment).Update("like_count", gorm.Expr("like_count + ?", 1)).Error; err != nil {
-		return fmt.Errorf("failed to like comment: %w", err)
+		return fmt.Errorf("failed to update comment like count: %w", err)
 	}
 
 	// 创建点赞消息通知（仅当评论有作者且不是自己给自己点赞时）
@@ -452,15 +472,41 @@ func (s *CommentService) UnlikeComment(commentID uint, userID uint) error {
 		return fmt.Errorf("failed to check user existence: %w", err)
 	}
 
-	// 检查点赞数是否大于0，避免出现负数
-	if comment.LikeCount <= 0 {
-		return errors.New("comment has no likes to unlike")
+	// 查找并删除点赞记录
+	var like models.CommentLike
+	if err := s.db.Where("comment_id = ? AND user_id = ?", commentID, userID).First(&like).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("like record not found")
+		}
+		return fmt.Errorf("failed to find like record: %w", err)
+	}
+
+	// 删除点赞记录
+	if err := s.db.Delete(&like).Error; err != nil {
+		return fmt.Errorf("failed to delete like record: %w", err)
 	}
 
 	// 减少评论的点赞数
 	if err := s.db.Model(&comment).Update("like_count", gorm.Expr("like_count - ?", 1)).Error; err != nil {
-		return fmt.Errorf("failed to unlike comment: %w", err)
+		return fmt.Errorf("failed to update comment like count: %w", err)
 	}
 
 	return nil
+}
+
+// GetUserLikedComments 获取用户点赞过的评论ID列表
+func (s *CommentService) GetUserLikedComments(userID uint) ([]uint, error) {
+	// 检查数据库连接是否已初始化
+	if s.db == nil {
+		return nil, errors.New("database connection not initialized")
+	}
+
+	var likedCommentIDs []uint
+	if err := s.db.Model(&models.CommentLike{}).
+		Where("user_id = ?", userID).
+		Pluck("comment_id", &likedCommentIDs).Error; err != nil {
+		return nil, fmt.Errorf("failed to get user liked comments: %w", err)
+	}
+
+	return likedCommentIDs, nil
 }

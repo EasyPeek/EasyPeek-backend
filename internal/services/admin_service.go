@@ -49,9 +49,8 @@ func (s *AdminService) AdminLogin(req *models.LoginRequest) (*models.User, strin
 	return &user, token, nil
 }
 
-// ===== 用户管理相关 =====
-
-// GetAllUsers 获取所有用户（包括已删除的）
+// User management
+// GetAllUsers
 func (s *AdminService) GetAllUsers(page, pageSize int, filter AdminUserFilter) ([]models.User, int64, error) {
 	if s.db == nil {
 		return nil, 0, errors.New("database connection not initialized")
@@ -95,6 +94,39 @@ func (s *AdminService) GetUserByID(userID uint) (*models.User, error) {
 
 	var user models.User
 	if err := s.db.First(&user, userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("user not found")
+		}
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+// GetUserByUsername
+func (s *AdminService) GetUserByUsername(username string) (*models.User, error) {
+	if s.db == nil {
+		return nil, errors.New("database connection not initialized")
+	}
+
+	var user models.User
+	if err := s.db.Where("username = ?", username).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("user not found")
+		}
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+// GetUserByEmail
+func (s *AdminService) GetUserByEmail(email string) (*models.User, error) {
+	if s.db == nil {
+		return nil, errors.New("database connection not initialized")
+	}
+	var user models.User
+	if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("user not found")
 		}
@@ -161,7 +193,7 @@ func (s *AdminService) UpdateUserInfo(userID uint, updateData AdminUserUpdateReq
 	return nil
 }
 
-// DeleteUser 硬删除用户
+// delete user
 func (s *AdminService) DeleteUser(userID uint) error {
 	if s.db == nil {
 		return errors.New("database connection not initialized")
