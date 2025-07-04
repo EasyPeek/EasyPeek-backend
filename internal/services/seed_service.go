@@ -57,9 +57,10 @@ func (s *SeedService) SeedAllData() error {
 		return fmt.Errorf("failed to seed example users: %w", err)
 	}
 
-	// 可以在这里添加其他类型的数据导入，例如：
-	// - RSS源数据
-	// - 其他初始化数据等
+	// 导入默认RSS源
+	if err := s.SeedRSSources(); err != nil {
+		return fmt.Errorf("failed to seed RSS sources: %w", err)
+	}
 
 	log.Println("all seed data initialized!")
 	return nil
@@ -347,6 +348,46 @@ func (s *SeedService) SeedRSSources() error {
 			Language:    "zh",
 			IsActive:    true,
 			Description: "网易科技新闻RSS源",
+			Priority:    1,
+			UpdateFreq:  60,
+		},
+		{
+			Name:        "澎湃新闻",
+			URL:         "https://feedx.net/rss/thepaper.xml",
+			Category:    "综合新闻",
+			Language:    "zh",
+			IsActive:    true,
+			Description: "澎湃新闻全文RSS源，提供综合新闻资讯",
+			Priority:    1,
+			UpdateFreq:  60,
+		},
+		{
+			Name:        "光明日报",
+			URL:         "https://feedx.net/rss/guangmingribao.xml",
+			Category:    "时政新闻",
+			Language:    "zh",
+			IsActive:    true,
+			Description: "光明日报全文RSS源，提供权威时政和文化新闻",
+			Priority:    1,
+			UpdateFreq:  60,
+		},
+		{
+			Name:        "新华每日电讯",
+			URL:         "https://feedx.net/rss/mrdx.xml",
+			Category:    "时政新闻",
+			Language:    "zh",
+			IsActive:    true,
+			Description: "新华每日电讯全文RSS源，提供权威时政和社会新闻",
+			Priority:    1,
+			UpdateFreq:  60,
+		},
+		{
+			Name:        "经济日报",
+			URL:         "https://feedx.net/rss/jingjiribao.xml",
+			Category:    "财经新闻",
+			Language:    "zh",
+			IsActive:    true,
+			Description: "经济日报全文RSS源，提供权威财经和经济政策新闻",
 			Priority:    1,
 			UpdateFreq:  60,
 		},
