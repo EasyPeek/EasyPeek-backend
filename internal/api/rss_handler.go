@@ -43,21 +43,21 @@ func (h *RSSHandler) CreateRSSSource(c *gin.Context) {
 
 	// 转换响应数据，映射字段名
 	responseData := map[string]interface{}{
-		"id":               source.ID,
-		"name":             source.Name,
-		"url":              source.URL,
-		"category":         source.Category,
-		"description":      source.Description,
-		"is_active":        source.IsActive,
-		"fetch_interval":   source.UpdateFreq, // 映射字段名
-		"last_fetch_time":  source.LastFetched,
-		"fetch_count":      source.FetchCount,
-		"error_count":      source.ErrorCount,
-		"priority":         source.Priority,
-		"language":         source.Language,
-		"tags":             source.Tags,
-		"created_at":       source.CreatedAt,
-		"updated_at":       source.UpdatedAt,
+		"id":              source.ID,
+		"name":            source.Name,
+		"url":             source.URL,
+		"category":        source.Category,
+		"description":     source.Description,
+		"is_active":       source.IsActive,
+		"fetch_interval":  source.UpdateFreq, // 映射字段名
+		"last_fetch_time": source.LastFetched,
+		"fetch_count":     source.FetchCount,
+		"error_count":     source.ErrorCount,
+		"priority":        source.Priority,
+		"language":        source.Language,
+		"tags":            source.Tags,
+		"created_at":      source.CreatedAt,
+		"updated_at":      source.UpdatedAt,
 	}
 
 	c.JSON(http.StatusCreated, utils.Response{
@@ -105,21 +105,21 @@ func (h *RSSHandler) GetRSSSources(c *gin.Context) {
 	var responseData []map[string]interface{}
 	for _, source := range sources {
 		item := map[string]interface{}{
-			"id":               source.ID,
-			"name":             source.Name,
-			"url":              source.URL,
-			"category":         source.Category,
-			"description":      source.Description,
-			"is_active":        source.IsActive,
-			"fetch_interval":   source.UpdateFreq, // 映射字段名
-			"last_fetch_time":  source.LastFetched,
-			"fetch_count":      source.FetchCount,
-			"error_count":      source.ErrorCount,
-			"priority":         source.Priority,
-			"language":         source.Language,
-			"tags":             source.Tags,
-			"created_at":       source.CreatedAt,
-			"updated_at":       source.UpdatedAt,
+			"id":              source.ID,
+			"name":            source.Name,
+			"url":             source.URL,
+			"category":        source.Category,
+			"description":     source.Description,
+			"is_active":       source.IsActive,
+			"fetch_interval":  source.UpdateFreq, // 映射字段名
+			"last_fetch_time": source.LastFetched,
+			"fetch_count":     source.FetchCount,
+			"error_count":     source.ErrorCount,
+			"priority":        source.Priority,
+			"language":        source.Language,
+			"tags":            source.Tags,
+			"created_at":      source.CreatedAt,
+			"updated_at":      source.UpdatedAt,
 		}
 		responseData = append(responseData, item)
 	}
@@ -161,21 +161,21 @@ func (h *RSSHandler) UpdateRSSSource(c *gin.Context) {
 
 	// 转换响应数据，映射字段名
 	responseData := map[string]interface{}{
-		"id":               source.ID,
-		"name":             source.Name,
-		"url":              source.URL,
-		"category":         source.Category,
-		"description":      source.Description,
-		"is_active":        source.IsActive,
-		"fetch_interval":   source.UpdateFreq, // 映射字段名
-		"last_fetch_time":  source.LastFetched,
-		"fetch_count":      source.FetchCount,
-		"error_count":      source.ErrorCount,
-		"priority":         source.Priority,
-		"language":         source.Language,
-		"tags":             source.Tags,
-		"created_at":       source.CreatedAt,
-		"updated_at":       source.UpdatedAt,
+		"id":              source.ID,
+		"name":            source.Name,
+		"url":             source.URL,
+		"category":        source.Category,
+		"description":     source.Description,
+		"is_active":       source.IsActive,
+		"fetch_interval":  source.UpdateFreq, // 映射字段名
+		"last_fetch_time": source.LastFetched,
+		"fetch_count":     source.FetchCount,
+		"error_count":     source.ErrorCount,
+		"priority":        source.Priority,
+		"language":        source.Language,
+		"tags":            source.Tags,
+		"created_at":      source.CreatedAt,
+		"updated_at":      source.UpdatedAt,
 	}
 
 	utils.Success(c, responseData)

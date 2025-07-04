@@ -721,7 +721,7 @@ func (p *OpenAICompatibleProvider) PredictTrends(content string, historicalData 
 // callAPI 调用API
 func (p *OpenAICompatibleProvider) callAPI(prompt string) (string, error) {
 	log.Printf("🤖 AI API 调用开始 - 模型: %s, baseURL: %s", p.model, p.baseURL)
-	
+
 	requestBody := map[string]interface{}{
 		"model": p.model,
 		"messages": []map[string]string{
@@ -769,7 +769,7 @@ func (p *OpenAICompatibleProvider) callAPI(prompt string) (string, error) {
 	start := time.Now()
 	resp, err := client.Do(req)
 	duration := time.Since(start)
-	
+
 	if err != nil {
 		log.Printf("❌ HTTP请求失败 (耗时: %v): %v", duration, err)
 		return "", err
@@ -785,7 +785,7 @@ func (p *OpenAICompatibleProvider) callAPI(prompt string) (string, error) {
 	}
 
 	log.Printf("📄 响应体长度: %d 字节", len(body))
-	
+
 	// 如果状态码不是200，先打印响应体用于调试
 	if resp.StatusCode != 200 {
 		log.Printf("❌ HTTP错误 %d - 响应内容: %s", resp.StatusCode, string(body))

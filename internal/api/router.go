@@ -39,9 +39,8 @@ func SetupRoutes() *gin.Engine {
 			auth.POST("/login", userHandler.Login)
 			auth.POST("/logout", userHandler.Logout)
 
-			auth.POST("/admin-login", adminHandler.AdminLogin) // 管理员登录
-			// auth.POST("/refresh", userHandler.RefreshToken)  // TODO: 实现token刷新
-			// auth.POST("/logout", userHandler.Logout)         // TODO: 实现登出
+			auth.POST("/admin-login", adminHandler.AdminLogin)
+			auth.POST("/admin-logout", adminHandler.AdminLogout)
 		}
 
 		// user routes

@@ -48,6 +48,10 @@ func (h *AdminHandler) AdminLogin(c *gin.Context) {
 	utils.Success(c, response)
 }
 
+func (h *AdminHandler) AdminLogout(c *gin.Context) {
+	utils.Success(c, gin.H{"message": "Admin logged out successfully"})
+}
+
 // GetSystemStats
 func (h *AdminHandler) GetSystemStats(c *gin.Context) {
 	stats, err := h.adminService.GetSystemStats()
