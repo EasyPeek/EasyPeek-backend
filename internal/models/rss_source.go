@@ -52,6 +52,8 @@ type CreateRSSSourceRequest struct {
 	Tags        []string `json:"tags"`
 	Priority    int      `json:"priority" binding:"omitempty,min=1,max=10"`
 	UpdateFreq  int      `json:"update_freq" binding:"omitempty,min=5,max=1440"`
+	// 兼容前端字段名
+	FetchInterval int `json:"fetch_interval" binding:"omitempty,min=5,max=1440"`
 }
 
 // 更新RSS源请求
@@ -65,6 +67,8 @@ type UpdateRSSSourceRequest struct {
 	Tags        []string `json:"tags"`
 	Priority    int      `json:"priority" binding:"omitempty,min=1,max=10"`
 	UpdateFreq  int      `json:"update_freq" binding:"omitempty,min=5,max=1440"`
+	// 兼容前端字段名
+	FetchInterval int `json:"fetch_interval" binding:"omitempty,min=5,max=1440"`
 }
 
 // RSS抓取统计
