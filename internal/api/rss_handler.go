@@ -28,16 +28,42 @@ func (h *RSSHandler) CreateRSSSource(c *gin.Context) {
 		return
 	}
 
+	// 处理前端字段映射
+	if updateFreq, exists := c.GetPostForm("update_freq"); exists {
+		if freq, err := strconv.Atoi(updateFreq); err == nil {
+			req.UpdateFreq = freq
+		}
+	}
+
 	source, err := h.rssService.CreateRSSSource(&req)
 	if err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
 
+	// 转换响应数据，映射字段名
+	responseData := map[string]interface{}{
+		"id":               source.ID,
+		"name":             source.Name,
+		"url":              source.URL,
+		"category":         source.Category,
+		"description":      source.Description,
+		"is_active":        source.IsActive,
+		"fetch_interval":   source.UpdateFreq, // 映射字段名
+		"last_fetch_time":  source.LastFetched,
+		"fetch_count":      source.FetchCount,
+		"error_count":      source.ErrorCount,
+		"priority":         source.Priority,
+		"language":         source.Language,
+		"tags":             source.Tags,
+		"created_at":       source.CreatedAt,
+		"updated_at":       source.UpdatedAt,
+	}
+
 	c.JSON(http.StatusCreated, utils.Response{
 		Code:    201,
 		Message: "RSS source created successfully",
-		Data:    source,
+		Data:    responseData,
 	})
 }
 
@@ -69,13 +95,43 @@ func (h *RSSHandler) GetRSSSources(c *gin.Context) {
 		}
 	}
 
-	sources, err := h.rssService.GetRSSSources(page, limit, category, isActive)
+	sources, total, err := h.rssService.GetRSSSourcesWithTotal(page, limit, category, isActive)
 	if err != nil {
 		utils.InternalServerError(c, "Failed to get RSS sources")
 		return
 	}
 
-	utils.Success(c, sources)
+	// 转换为前端期望的字段名
+	var responseData []map[string]interface{}
+	for _, source := range sources {
+		item := map[string]interface{}{
+			"id":               source.ID,
+			"name":             source.Name,
+			"url":              source.URL,
+			"category":         source.Category,
+			"description":      source.Description,
+			"is_active":        source.IsActive,
+			"fetch_interval":   source.UpdateFreq, // 映射字段名
+			"last_fetch_time":  source.LastFetched,
+			"fetch_count":      source.FetchCount,
+			"error_count":      source.ErrorCount,
+			"priority":         source.Priority,
+			"language":         source.Language,
+			"tags":             source.Tags,
+			"created_at":       source.CreatedAt,
+			"updated_at":       source.UpdatedAt,
+		}
+		responseData = append(responseData, item)
+	}
+
+	response := map[string]interface{}{
+		"rss_sources": responseData,
+		"total":       total,
+		"page":        page,
+		"limit":       limit,
+	}
+
+	utils.Success(c, response)
 }
 
 // UpdateRSSSource 更新RSS源
@@ -103,7 +159,26 @@ func (h *RSSHandler) UpdateRSSSource(c *gin.Context) {
 		return
 	}
 
-	utils.Success(c, source)
+	// 转换响应数据，映射字段名
+	responseData := map[string]interface{}{
+		"id":               source.ID,
+		"name":             source.Name,
+		"url":              source.URL,
+		"category":         source.Category,
+		"description":      source.Description,
+		"is_active":        source.IsActive,
+		"fetch_interval":   source.UpdateFreq, // 映射字段名
+		"last_fetch_time":  source.LastFetched,
+		"fetch_count":      source.FetchCount,
+		"error_count":      source.ErrorCount,
+		"priority":         source.Priority,
+		"language":         source.Language,
+		"tags":             source.Tags,
+		"created_at":       source.CreatedAt,
+		"updated_at":       source.UpdatedAt,
+	}
+
+	utils.Success(c, responseData)
 }
 
 // DeleteRSSSource 删除RSS源
@@ -155,4 +230,28 @@ func (h *RSSHandler) FetchAllRSSFeeds(c *gin.Context) {
 	}
 
 	utils.Success(c, result)
+}
+
+// GetRSSCategories 获取RSS源分类列表
+func (h *RSSHandler) GetRSSCategories(c *gin.Context) {
+	categories, err := h.rssService.GetRSSCategories()
+	if err != nil {
+		utils.InternalServerError(c, "Failed to get RSS categories")
+		return
+	}
+
+	utils.Success(c, map[string]interface{}{
+		"categories": categories,
+	})
+}
+
+// GetRSSStats 获取RSS源统计信息
+func (h *RSSHandler) GetRSSStats(c *gin.Context) {
+	stats, err := h.rssService.GetRSSStats()
+	if err != nil {
+		utils.InternalServerError(c, "Failed to get RSS statistics")
+		return
+	}
+
+	utils.Success(c, stats)
 }

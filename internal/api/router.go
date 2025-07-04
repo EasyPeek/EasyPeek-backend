@@ -198,6 +198,8 @@ func SetupRoutes() *gin.Engine {
 				rss.DELETE("/:id", rssHandler.DeleteRSSSource)      // 删除RSS源
 				rss.POST("/:id/fetch", rssHandler.FetchRSSFeed)     // 手动抓取RSS源
 				rss.POST("/fetch-all", rssHandler.FetchAllRSSFeeds) // 抓取所有RSS源
+				rss.GET("/categories", rssHandler.GetRSSCategories) // 获取RSS分类列表
+				rss.GET("/stats", rssHandler.GetRSSStats)           // 获取RSS统计信息
 			}
 
 			// 事件管理

@@ -64,6 +64,12 @@ func (s *RSSService) CreateRSSSource(req *models.CreateRSSSourceRequest) (*model
 		return nil, fmt.Errorf("failed to parse RSS feed: %v", err)
 	}
 
+	// 处理兼容字段：优先使用 FetchInterval，如果为0则使用 UpdateFreq
+	updateFreq := req.UpdateFreq
+	if req.FetchInterval > 0 {
+		updateFreq = req.FetchInterval
+	}
+
 	// 创建RSS源
 	source := models.RSSSource{
 		Name:        req.Name,
@@ -73,7 +79,7 @@ func (s *RSSService) CreateRSSSource(req *models.CreateRSSSourceRequest) (*model
 		Description: req.Description,
 		Tags:        utils.SliceToJSON(req.Tags),
 		Priority:    req.Priority,
-		UpdateFreq:  req.UpdateFreq,
+		UpdateFreq:  updateFreq,
 		IsActive:    true,
 	}
 
@@ -158,6 +164,35 @@ func (s *RSSService) GetRSSSources(page, limit int, category string, isActive *b
 	}, nil
 }
 
+// GetRSSSourcesWithTotal 获取RSS源列表（返回源列表和总数）
+func (s *RSSService) GetRSSSourcesWithTotal(page, limit int, category string, isActive *bool) ([]models.RSSSource, int64, error) {
+	var sources []models.RSSSource
+	var total int64
+
+	db := s.db.Model(&models.RSSSource{})
+
+	// 添加筛选条件
+	if category != "" {
+		db = db.Where("category = ?", category)
+	}
+	if isActive != nil {
+		db = db.Where("is_active = ?", *isActive)
+	}
+
+	// 获取总数
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// 分页查询
+	offset := (page - 1) * limit
+	if err := db.Order("priority DESC, created_at DESC").Offset(offset).Limit(limit).Find(&sources).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return sources, total, nil
+}
+
 // UpdateRSSSource 更新RSS源
 func (s *RSSService) UpdateRSSSource(id uint, req *models.UpdateRSSSourceRequest) (*models.RSSSourceResponse, error) {
 	var source models.RSSSource
@@ -205,7 +240,10 @@ func (s *RSSService) UpdateRSSSource(id uint, req *models.UpdateRSSSourceRequest
 	if req.Priority > 0 {
 		source.Priority = req.Priority
 	}
-	if req.UpdateFreq > 0 {
+	// 处理兼容字段：优先使用 FetchInterval，如果为0则使用 UpdateFreq
+	if req.FetchInterval > 0 {
+		source.UpdateFreq = req.FetchInterval
+	} else if req.UpdateFreq > 0 {
 		source.UpdateFreq = req.UpdateFreq
 	}
 
@@ -909,6 +947,73 @@ func (s *RSSService) convertToRSSSourceResponse(source *models.RSSSource) *model
 		CreatedAt:   source.CreatedAt,
 		UpdatedAt:   source.UpdatedAt,
 	}
+}
+
+// GetRSSCategories 获取所有RSS源分类
+func (s *RSSService) GetRSSCategories() ([]string, error) {
+	var categories []string
+	
+	err := s.db.Model(&models.RSSSource{}).
+		Distinct("category").
+		Where("category != ''").
+		Pluck("category", &categories).Error
+	
+	if err != nil {
+		return nil, err
+	}
+	
+	return categories, nil
+}
+
+// RSSStats RSS统计信息
+type RSSStats struct {
+	TotalSources    int64 `json:"total_sources"`
+	ActiveSources   int64 `json:"active_sources"`
+	InactiveSources int64 `json:"inactive_sources"`
+	TotalNews       int64 `json:"total_news"`
+	TodayNews       int64 `json:"today_news"`
+	Categories      int64 `json:"categories"`
+}
+
+// GetRSSStats 获取RSS统计信息
+func (s *RSSService) GetRSSStats() (*RSSStats, error) {
+	stats := &RSSStats{}
+	
+	// 总RSS源数
+	if err := s.db.Model(&models.RSSSource{}).Count(&stats.TotalSources).Error; err != nil {
+		return nil, err
+	}
+	
+	// 活跃RSS源数
+	if err := s.db.Model(&models.RSSSource{}).Where("is_active = ?", true).Count(&stats.ActiveSources).Error; err != nil {
+		return nil, err
+	}
+	
+	// 非活跃RSS源数
+	stats.InactiveSources = stats.TotalSources - stats.ActiveSources
+	
+	// 总新闻数（来自RSS）
+	if err := s.db.Model(&models.News{}).Where("source_type = ?", models.NewsTypeRSS).Count(&stats.TotalNews).Error; err != nil {
+		return nil, err
+	}
+	
+	// 今日新闻数
+	today := time.Now().Truncate(24 * time.Hour)
+	if err := s.db.Model(&models.News{}).
+		Where("source_type = ? AND created_at >= ?", models.NewsTypeRSS, today).
+		Count(&stats.TodayNews).Error; err != nil {
+		return nil, err
+	}
+	
+	// 分类数
+	if err := s.db.Model(&models.RSSSource{}).
+		Distinct("category").
+		Where("category != ''").
+		Count(&stats.Categories).Error; err != nil {
+		return nil, err
+	}
+	
+	return stats, nil
 }
 
 // convertToNewsItemResponse 函数已删除，现在直接使用 News.ToResponse() 方法
