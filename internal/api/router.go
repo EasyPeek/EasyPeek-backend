@@ -177,6 +177,23 @@ func SetupRoutes() *gin.Engine {
 			}
 		}
 
+		// RSS routes
+		rss := v1.Group("/rss")
+		{
+			// 管理员路由
+			adminRSS := rss.Group("")
+			adminRSS.Use(middleware.AuthMiddleware())
+			adminRSS.Use(middleware.RoleMiddleware(middleware.RoleAdmin))
+			{
+				adminRSS.GET("/sources", rssHandler.GetRSSSources)
+				adminRSS.POST("/sources", rssHandler.CreateRSSSource)
+				adminRSS.PUT("/sources/:id", rssHandler.UpdateRSSSource)
+				adminRSS.DELETE("/sources/:id", rssHandler.DeleteRSSSource)
+				adminRSS.POST("/sources/:id/fetch", rssHandler.FetchRSSFeed)
+				adminRSS.POST("/fetch-all", rssHandler.FetchAllRSSFeeds)
+			}
+		}
+
 		// admin routes
 		admin := v1.Group("/admin")
 		admin.Use(middleware.AuthMiddleware())
@@ -233,6 +250,17 @@ func SetupRoutes() *gin.Engine {
 			{
 				comments.GET("", commentHandler.GetAllComments)            // 获取所有评论
 				comments.DELETE("/:id", commentHandler.AdminDeleteComment) // 管理员删除评论（硬删除）
+			}
+
+			// RSS源管理
+			rssAdmin := admin.Group("/rss-sources")
+			{
+				rssAdmin.GET("", adminHandler.GetAllRSSSources)            // 获取所有RSS源
+				rssAdmin.POST("", adminHandler.CreateRSSSource)            // 创建RSS源
+				rssAdmin.PUT("/:id", adminHandler.UpdateRSSSource)         // 更新RSS源
+				rssAdmin.DELETE("/:id", adminHandler.DeleteRSSSource)      // 删除RSS源
+				rssAdmin.POST("/:id/fetch", adminHandler.FetchRSSFeed)     // 手动抓取RSS源
+				rssAdmin.POST("/fetch-all", adminHandler.FetchAllRSSFeeds) // 抓取所有RSS源
 			}
 
 			// 消息管理

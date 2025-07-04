@@ -326,90 +326,52 @@ func (s *SeedService) SeedRSSources() error {
 	// 创建一些默认的RSS源
 	defaultSources := []models.RSSSource{
 		{
-<<<<<<< HEAD
-			Name:        "BBC News",
-			URL:         "http://feeds.bbci.co.uk/news/rss.xml",
-			Category:    "国际新闻",
-			Language:    "en",
-			IsActive:    true,
-			Description: "BBC 新闻RSS源",
-=======
 			Name:        "澎湃新闻",
 			URL:         "https://feedx.net/rss/thepaper.xml",
 			Category:    "综合新闻",
 			Language:    "zh",
 			IsActive:    true,
 			Description: "澎湃新闻全文RSS源，提供综合新闻资讯",
->>>>>>> 2a48be314c5676635d9608a5e0bc9cac425846e0
 			Priority:    1,
 			UpdateFreq:  60,
 		},
 		{
-<<<<<<< HEAD
-			Name:        "CNN Top Stories",
-			URL:         "http://rss.cnn.com/rss/edition.rss",
-			Category:    "国际新闻",
-			Language:    "en",
-			IsActive:    true,
-			Description: "CNN 头条新闻RSS源",
-=======
+
 			Name:        "光明日报",
 			URL:         "https://feedx.net/rss/guangmingribao.xml",
 			Category:    "时政新闻",
 			Language:    "zh",
 			IsActive:    true,
 			Description: "光明日报全文RSS源，提供权威时政和文化新闻",
->>>>>>> 2a48be314c5676635d9608a5e0bc9cac425846e0
-			Priority:    1,
-			UpdateFreq:  60,
+
+			Priority:   1,
+			UpdateFreq: 60,
 		},
 		{
-<<<<<<< HEAD
-			Name:        "TechCrunch",
-			URL:         "https://techcrunch.com/feed/",
-			Category:    "科技",
-			Language:    "en",
-			IsActive:    true,
-			Description: "TechCrunch 科技新闻RSS源",
-=======
+
 			Name:        "新华每日电讯",
 			URL:         "https://feedx.net/rss/mrdx.xml",
 			Category:    "时政新闻",
 			Language:    "zh",
 			IsActive:    true,
 			Description: "新华每日电讯全文RSS源，提供权威时政和社会新闻",
->>>>>>> 2a48be314c5676635d9608a5e0bc9cac425846e0
 			Priority:    1,
 			UpdateFreq:  60,
 		},
 		{
-<<<<<<< HEAD
-			Name:        "Hacker News",
-			URL:         "https://hnrss.org/frontpage",
-			Category:    "科技",
-			Language:    "en",
-			IsActive:    true,
-			Description: "Hacker News 前端页面RSS源",
-=======
+
 			Name:        "经济日报",
 			URL:         "https://feedx.net/rss/jingjiribao.xml",
 			Category:    "财经新闻",
 			Language:    "zh",
 			IsActive:    true,
 			Description: "经济日报全文RSS源，提供权威财经和经济政策新闻",
->>>>>>> 2a48be314c5676635d9608a5e0bc9cac425846e0
-			Priority:    1,
-			UpdateFreq:  60,
+
+			Priority:   1,
+			UpdateFreq: 60,
 		},
 		{
-<<<<<<< HEAD
-			Name:        "Reuters World News",
-			URL:         "https://feeds.reuters.com/reuters/worldNews",
-			Category:    "国际新闻",
-			Language:    "en",
-			IsActive:    true,
-			Description: "路透社世界新闻RSS源",
-=======
+
 			Name:        "南方周末",
 			URL:         "https://feedx.net/rss/infzm.xml",
 			Category:    "时政新闻",
@@ -436,7 +398,6 @@ func (s *SeedService) SeedRSSources() error {
 			Language:    "zh",
 			IsActive:    true,
 			Description: "3dmgame全文RSS源，提供权威游戏新闻",
->>>>>>> 2a48be314c5676635d9608a5e0bc9cac425846e0
 			Priority:    1,
 			UpdateFreq:  60,
 		},
