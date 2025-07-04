@@ -64,6 +64,52 @@ func (h *CommentHandler) CreateComment(c *gin.Context) {
 	utils.Success(c, comment.ToResponse())
 }
 
+// ReplyToComment 回复评论
+func (h *CommentHandler) ReplyToComment(c *gin.Context) {
+	var req models.CommentReplyRequest
+	// 将请求的 JSON 主体绑定到 CommentReplyRequest 结构体
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Invalid request data: "+err.Error())
+		return
+	}
+
+	// 从 Gin 上下文中获取用户ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.Unauthorized(c, "User not authenticated")
+		return
+	}
+	// 将 userID 转换为 uint 类型
+	replierID, ok := userID.(uint)
+	if !ok {
+		utils.InternalServerError(c, "Failed to get user ID from context")
+		return
+	}
+
+	// 调用 CommentService 的 ReplyToComment 方法来创建回复
+	reply, err := h.commentService.ReplyToComment(&req, replierID)
+	if err != nil {
+		// 根据错误类型返回不同的 HTTP 状态码
+		if err.Error() == "database connection not initialized" {
+			utils.InternalServerError(c, err.Error())
+		} else if err.Error() == "news not found" {
+			utils.NotFound(c, err.Error())
+		} else if err.Error() == "user not found" {
+			utils.NotFound(c, err.Error())
+		} else if err.Error() == "parent comment not found" {
+			utils.NotFound(c, err.Error())
+		} else if err.Error() == "parent comment does not belong to the same news" {
+			utils.BadRequest(c, err.Error())
+		} else {
+			utils.BadRequest(c, err.Error())
+		}
+		return
+	}
+
+	// 成功创建回复，返回回复的响应格式
+	utils.Success(c, reply.ToResponse())
+}
+
 // CreateAnonymousComment 创建匿名评论
 func (h *CommentHandler) CreateAnonymousComment(c *gin.Context) {
 	var req models.CommentAnonymousCreateRequest
