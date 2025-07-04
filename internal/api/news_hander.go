@@ -321,3 +321,120 @@ func (h *NewsHandler) GetNewsByCategory(c *gin.Context) {
 	// 返回成功响应
 	utils.Success(c, newsResponses)
 }
+
+// LikeNews 点赞/取消点赞新闻
+func (h *NewsHandler) LikeNews(c *gin.Context) {
+	// 从 URL 参数中获取新闻ID
+	idStr := c.Param("id")
+	newsID, err := strconv.Atoi(idStr)
+	if err != nil {
+		utils.BadRequest(c, "Invalid news ID")
+		return
+	}
+
+	// 从上下文中获取用户ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	uid, ok := userID.(uint)
+	if !ok {
+		utils.InternalServerError(c, "Failed to get user ID from context")
+		return
+	}
+
+	// 调用服务进行点赞/取消点赞
+	if err := h.newsService.LikeNews(uint(newsID), uid); err != nil {
+		if err.Error() == "news not found" {
+			utils.NotFound(c, err.Error())
+		} else {
+			utils.InternalServerError(c, err.Error())
+		}
+		return
+	}
+
+	// 检查用户当前的点赞状态
+	isLiked, err := h.newsService.CheckUserLikedNews(uint(newsID), uid)
+	if err != nil {
+		utils.InternalServerError(c, err.Error())
+		return
+	}
+
+	// 获取更新后的新闻信息
+	news, err := h.newsService.GetNewsByID(uint(newsID))
+	if err != nil {
+		utils.InternalServerError(c, err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{
+		"message":    "操作成功",
+		"is_liked":   isLiked,
+		"like_count": news.LikeCount,
+		"news_id":    newsID,
+	})
+}
+
+// GetNewsLikeStatus 获取用户对新闻的点赞状态
+func (h *NewsHandler) GetNewsLikeStatus(c *gin.Context) {
+	// 从 URL 参数中获取新闻ID
+	idStr := c.Param("id")
+	newsID, err := strconv.Atoi(idStr)
+	if err != nil {
+		utils.BadRequest(c, "Invalid news ID")
+		return
+	}
+
+	// 从上下文中获取用户ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	uid, ok := userID.(uint)
+	if !ok {
+		utils.InternalServerError(c, "Failed to get user ID from context")
+		return
+	}
+
+	// 检查点赞状态
+	isLiked, err := h.newsService.CheckUserLikedNews(uint(newsID), uid)
+	if err != nil {
+		utils.InternalServerError(c, err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{
+		"news_id":  newsID,
+		"is_liked": isLiked,
+	})
+}
+
+// IncrementNewsView 增加新闻浏览量
+func (h *NewsHandler) IncrementNewsView(c *gin.Context) {
+	// 从 URL 参数中获取新闻ID
+	idStr := c.Param("id")
+	newsID, err := strconv.Atoi(idStr)
+	if err != nil {
+		utils.BadRequest(c, "Invalid news ID")
+		return
+	}
+
+	// 增加浏览量
+	if err := h.newsService.IncrementViewCount(uint(newsID)); err != nil {
+		if err.Error() == "news not found" {
+			utils.NotFound(c, err.Error())
+		} else {
+			utils.InternalServerError(c, err.Error())
+		}
+		return
+	}
+
+	utils.Success(c, gin.H{
+		"message": "浏览量已更新",
+		"news_id": newsID,
+	})
+}

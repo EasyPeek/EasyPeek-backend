@@ -90,14 +90,17 @@ func SetupRoutes() *gin.Engine {
 			news.GET("/category/:category", newsHandler.GetNewsByCategory) // 按分类获取新闻
 			news.GET("/:id", newsHandler.GetNewsByID)                      // 根据ID获取单条新闻
 			news.GET("/search", newsHandler.SearchNews)                    // 搜索新闻
+			news.POST("/:id/view", newsHandler.IncrementNewsView)          // 增加浏览量
 
 			// 需要身份验证的路由
 			authNews := news.Group("")
 			authNews.Use(middleware.AuthMiddleware())
 			{
-				authNews.POST("", newsHandler.CreateNews)       // 创建新闻
-				authNews.PUT("/:id", newsHandler.UpdateNews)    // 更新新闻
-				authNews.DELETE("/:id", newsHandler.DeleteNews) // 删除新闻
+				authNews.POST("", newsHandler.CreateNews)                // 创建新闻
+				authNews.PUT("/:id", newsHandler.UpdateNews)             // 更新新闻
+				authNews.DELETE("/:id", newsHandler.DeleteNews)          // 删除新闻
+				authNews.POST("/:id/like", newsHandler.LikeNews)         // 点赞/取消点赞新闻
+				authNews.GET("/:id/like", newsHandler.GetNewsLikeStatus) // 获取点赞状态
 			}
 		}
 
