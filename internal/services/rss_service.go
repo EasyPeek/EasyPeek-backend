@@ -24,85 +24,6 @@ type RSSService struct {
 	parser *gofeed.Parser
 }
 
-func NewRSSService() *RSSService {
-	parser := gofeed.NewParser()
-
-	// 设置自定义HTTP客户端，添加超时和User-Agent
-	client := &http.Client{
-		Timeout: 30 * time.Second, // 30秒超时
-		Transport: &http.Transport{
-			MaxIdleConns:       10,
-			IdleConnTimeout:    30 * time.Second,
-			DisableCompression: false,
-		},
-	}
-
-	parser.Client = client
-	parser.UserAgent = "EasyPeek/1.0 RSS Reader (Mozilla/5.0 compatible)"
-
-	return &RSSService{
-		db:     database.GetDB(),
-		parser: parser,
-	}
-}
-
-// CreateRSSSource 创建RSS源
-func (s *RSSService) CreateRSSSource(req *models.CreateRSSSourceRequest) (*models.RSSSourceResponse, error) {
-	// 检查URL是否已存在
-	var existingSource models.RSSSource
-	if err := s.db.Where("url = ?", req.URL).First(&existingSource).Error; err == nil {
-		return nil, errors.New("RSS source with this URL already exists")
-	}
-
-	// 测试RSS源是否可访问
-	_, err := s.parser.ParseURL(req.URL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse RSS feed: %v", err)
-	}
-
-	// 处理兼容字段：优先使用 FetchInterval，如果为0则使用 UpdateFreq
-	updateFreq := req.UpdateFreq
-	if req.FetchInterval > 0 {
-		updateFreq = req.FetchInterval
-	}
-
-	// 创建RSS源
-	source := models.RSSSource{
-		Name:        req.Name,
-		URL:         req.URL,
-		Category:    req.Category,
-		Language:    req.Language,
-		Description: req.Description,
-		Tags:        utils.SliceToJSON(req.Tags),
-		Priority:    req.Priority,
-		UpdateFreq:  updateFreq,
-		IsActive:    true,
-	}
-
-	// 设置默认值
-	if source.Language == "" {
-		source.Language = "zh"
-	}
-	if source.Priority == 0 {
-		source.Priority = 1
-	}
-	if source.UpdateFreq == 0 {
-		source.UpdateFreq = 60
-	}
-
-	if err := s.db.Create(&source).Error; err != nil {
-		return nil, err
-	}
-
-	return s.convertToRSSSourceResponse(&source), nil
-}
-
-// RSSSourceListResponse RSS源列表响应结构
-type RSSSourceListResponse struct {
-	Total   int64                      `json:"total"`
-	Sources []models.RSSSourceResponse `json:"sources"`
-}
-
 // NewsListResponse 新闻列表响应结构
 type NewsListResponse struct {
 	Total int64                 `json:"total"`
@@ -122,75 +43,85 @@ type NewsQueryRequest struct {
 	SortBy      string `json:"sort_by" form:"sort_by"`
 }
 
-// GetRSSSources 获取RSS源列表
-func (s *RSSService) GetRSSSources(page, limit int, category string, isActive *bool) (*RSSSourceListResponse, error) {
-	var sources []models.RSSSource
-	var total int64
+func NewRSSService() *RSSService {
+	parser := gofeed.NewParser()
 
-	db := s.db.Model(&models.RSSSource{})
-
-	// 添加筛选条件
-	if category != "" {
-		db = db.Where("category = ?", category)
-	}
-	if isActive != nil {
-		db = db.Where("is_active = ?", *isActive)
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:       10,
+			IdleConnTimeout:    30 * time.Second,
+			DisableCompression: false,
+		},
 	}
 
-	// 获取总数
-	if err := db.Count(&total).Error; err != nil {
-		return nil, err
-	}
+	parser.Client = client
+	parser.UserAgent = "EasyPeek/1.0 RSS Reader (Mozilla/5.0 compatible)"
 
-	// 分页查询
-	offset := (page - 1) * limit
-	if err := db.Order("priority DESC, created_at DESC").Offset(offset).Limit(limit).Find(&sources).Error; err != nil {
-		return nil, err
+	return &RSSService{
+		db:     database.GetDB(),
+		parser: parser,
 	}
-
-	// 转换响应格式
-	var responses []models.RSSSourceResponse
-	for _, source := range sources {
-		responses = append(responses, *s.convertToRSSSourceResponse(&source))
-	}
-
-	return &RSSSourceListResponse{
-		Total:   total,
-		Sources: responses,
-	}, nil
 }
 
-// GetRSSSourcesWithTotal 获取RSS源列表（返回源列表和总数）
-func (s *RSSService) GetRSSSourcesWithTotal(page, limit int, category string, isActive *bool) ([]models.RSSSource, int64, error) {
+// CreateRSSSource
+func (s *RSSService) CreateRSSSource(req *models.CreateRSSSourceRequest) (*models.RSSSource, error) {
+	var existingSource models.RSSSource
+	if err := s.db.Where("url = ?", req.URL).First(&existingSource).Error; err == nil {
+		return nil, errors.New("RSS source with this URL already exists")
+	}
+
+	// 创建RSS源
+	source := models.RSSSource{
+		Name:        req.Name,
+		URL:         req.URL,
+		Category:    req.Category,
+		Language:    req.Language,
+		Description: req.Description,
+		Tags:        utils.SliceToJSON(req.Tags),
+		Priority:    req.Priority,
+		UpdateFreq:  req.UpdateFreq,
+		IsActive:    true,
+	}
+
+	if source.Language == "" {
+		source.Language = "zh"
+	}
+	if source.Priority == 0 {
+		source.Priority = 1
+	}
+	if source.UpdateFreq == 0 {
+		source.UpdateFreq = 60
+	}
+
+	if err := s.db.Create(&source).Error; err != nil {
+		return nil, err
+	}
+
+	return &source, nil
+}
+
+// GetRSSSources
+func (s *RSSService) GetAllRSSSources(page, limit int) ([]models.RSSSource, int64, error) {
 	var sources []models.RSSSource
 	var total int64
 
 	db := s.db.Model(&models.RSSSource{})
 
-	// 添加筛选条件
-	if category != "" {
-		db = db.Where("category = ?", category)
-	}
-	if isActive != nil {
-		db = db.Where("is_active = ?", *isActive)
-	}
-
-	// 获取总数
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	// 分页查询
 	offset := (page - 1) * limit
-	if err := db.Order("priority DESC, created_at DESC").Offset(offset).Limit(limit).Find(&sources).Error; err != nil {
+	if err := db.Order("id ASC").Offset(offset).Limit(limit).Find(&sources).Error; err != nil {
 		return nil, 0, err
 	}
 
 	return sources, total, nil
 }
 
-// UpdateRSSSource 更新RSS源
-func (s *RSSService) UpdateRSSSource(id uint, req *models.UpdateRSSSourceRequest) (*models.RSSSourceResponse, error) {
+// UpdateRSSSource
+func (s *RSSService) UpdateRSSSource(id uint, req *models.UpdateRSSSourceRequest) (*models.RSSSource, error) {
 	var source models.RSSSource
 	if err := s.db.First(&source, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -236,18 +167,12 @@ func (s *RSSService) UpdateRSSSource(id uint, req *models.UpdateRSSSourceRequest
 	if req.Priority > 0 {
 		source.Priority = req.Priority
 	}
-	// 处理兼容字段：优先使用 FetchInterval，如果为0则使用 UpdateFreq
-	if req.FetchInterval > 0 {
-		source.UpdateFreq = req.FetchInterval
-	} else if req.UpdateFreq > 0 {
-		source.UpdateFreq = req.UpdateFreq
-	}
 
 	if err := s.db.Save(&source).Error; err != nil {
 		return nil, err
 	}
 
-	return s.convertToRSSSourceResponse(&source), nil
+	return &source, nil
 }
 
 // DeleteRSSSource 删除RSS源
@@ -927,27 +852,6 @@ func (s *RSSService) calculateNewsHotness(newsID uint) error {
 	return s.db.Model(&newsItem).UpdateColumn("hotness_score", finalScore).Error
 }
 
-// 转换函数
-func (s *RSSService) convertToRSSSourceResponse(source *models.RSSSource) *models.RSSSourceResponse {
-	return &models.RSSSourceResponse{
-		ID:          source.ID,
-		Name:        source.Name,
-		URL:         source.URL,
-		Category:    source.Category,
-		Language:    source.Language,
-		IsActive:    source.IsActive,
-		LastFetched: source.LastFetched,
-		FetchCount:  source.FetchCount,
-		ErrorCount:  source.ErrorCount,
-		Description: source.Description,
-		Tags:        source.Tags,
-		Priority:    source.Priority,
-		UpdateFreq:  source.UpdateFreq,
-		CreatedAt:   source.CreatedAt,
-		UpdatedAt:   source.UpdatedAt,
-	}
-}
-
 // GetRSSCategories 获取所有RSS源分类
 func (s *RSSService) GetRSSCategories() ([]string, error) {
 	var categories []string
@@ -1014,3 +918,4 @@ func (s *RSSService) GetRSSStats() (*RSSStats, error) {
 
 	return stats, nil
 }
+

@@ -117,7 +117,7 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		user.Interests = req.Interests
 	}
 
-	if err := h.userService.UpdateUser(user); err != nil {
+	if err := h.userService.UpdateUserInfo(user); err != nil {
 		utils.InternalServerError(c, err.Error())
 		return
 	}
@@ -156,7 +156,7 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 	}
 
 	user.Password = req.NewPassword
-	if err := h.userService.UpdateUser(user); err != nil {
+	if err := h.userService.UpdateUserInfo(user); err != nil {
 		utils.InternalServerError(c, err.Error())
 		return
 	}

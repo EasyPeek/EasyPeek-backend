@@ -51,7 +51,7 @@ func (s *AdminService) AdminLogin(req *models.LoginRequest) (*models.User, strin
 
 // User management
 // GetAllUsers
-func (s *AdminService) GetAllUsers(page, pageSize int, filter AdminUserFilter) ([]models.User, int64, error) {
+func (s *AdminService) GetAllUsers(page, pageSize int) ([]models.User, int64, error) {
 	if s.db == nil {
 		return nil, 0, errors.New("database connection not initialized")
 	}
@@ -61,32 +61,19 @@ func (s *AdminService) GetAllUsers(page, pageSize int, filter AdminUserFilter) (
 
 	query := s.db.Model(&models.User{})
 
-	// 应用过滤条件
-	if filter.Role != "" {
-		query = query.Where("role = ?", filter.Role)
-	}
-	if filter.Status != "" {
-		query = query.Where("status = ?", filter.Status)
-	}
-	if filter.Search != "" {
-		query = query.Where("username ILIKE ? OR email ILIKE ?", "%"+filter.Search+"%", "%"+filter.Search+"%")
-	}
-
-	// 计算总数
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	// 分页查询
 	offset := (page - 1) * pageSize
-	if err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&users).Error; err != nil {
+	if err := query.Offset(offset).Limit(pageSize).Order("id ASC").Find(&users).Error; err != nil {
 		return nil, 0, err
 	}
 
 	return users, total, nil
 }
 
-// GetUserByID 获取指定用户详细信息
+// GetUserByID
 func (s *AdminService) GetUserByID(userID uint) (*models.User, error) {
 	if s.db == nil {
 		return nil, errors.New("database connection not initialized")
@@ -136,13 +123,12 @@ func (s *AdminService) GetUserByEmail(email string) (*models.User, error) {
 	return &user, nil
 }
 
-// UpdateUserInfo 更新用户信息
+// UpdateUserInfo
 func (s *AdminService) UpdateUserInfo(userID uint, updateData AdminUserUpdateRequest) error {
 	if s.db == nil {
 		return errors.New("database connection not initialized")
 	}
 
-	// 检查用户是否存在
 	var user models.User
 	if err := s.db.First(&user, userID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -151,7 +137,6 @@ func (s *AdminService) UpdateUserInfo(userID uint, updateData AdminUserUpdateReq
 		return err
 	}
 
-	// 检查新的用户名和邮箱是否已被其他用户使用
 	if updateData.Username != "" && updateData.Username != user.Username {
 		var existingUser models.User
 		if err := s.db.Where("username = ? AND id != ?", updateData.Username, userID).First(&existingUser).Error; err == nil {
@@ -166,7 +151,6 @@ func (s *AdminService) UpdateUserInfo(userID uint, updateData AdminUserUpdateReq
 		}
 	}
 
-	// 更新用户信息
 	updates := make(map[string]interface{})
 	if updateData.Username != "" {
 		updates["username"] = updateData.Username
@@ -219,16 +203,15 @@ func (s *AdminService) GetSystemStats() (*SystemStats, error) {
 
 	stats := &SystemStats{}
 
-	// 用户统计
+	// User statistics
 	s.db.Model(&models.User{}).Where("status = ?", "active").Count(&stats.TotalActiveUsers)
 	s.db.Model(&models.User{}).Where("status = ?", "deleted").Count(&stats.TotalDeletedUsers)
 	s.db.Model(&models.User{}).Where("role = ?", "admin").Count(&stats.TotalAdmins)
 
-	// 事件统计
 	s.db.Model(&models.Event{}).Count(&stats.TotalEvents)
 	s.db.Model(&models.Event{}).Where("status = ?", "进行中").Count(&stats.ActiveEvents)
 
-	// RSS源统计
+	// RSS statistics
 	s.db.Model(&models.RSSSource{}).Count(&stats.TotalRSSSources)
 	s.db.Model(&models.RSSSource{}).Where("is_active = ?", true).Count(&stats.ActiveRSSSources)
 
@@ -321,18 +304,17 @@ func (s *AdminService) GetAllNews(page, pageSize int, filter AdminNewsFilter) ([
 
 // ===== 数据类型定义 =====
 
-type AdminUserFilter struct {
-	Role   string `form:"role"`
-	Status string `form:"status"`
-	Search string `form:"search"`
-}
-
 type AdminUserUpdateRequest struct {
-	Username string `json:"username" binding:"omitempty,min=3,max=20"`
-	Email    string `json:"email" binding:"omitempty,email"`
-	Avatar   string `json:"avatar"`
-	Role     string `json:"role" binding:"omitempty,oneof=user admin system"`
-	Status   string `json:"status" binding:"omitempty,oneof=active inactive suspended deleted"`
+	Username  string `json:"username" binding:"omitempty,min=3,max=20"`
+	Email     string `json:"email" binding:"omitempty,email"`
+	Password  string `json:"password" binding:"omitempty,min=8"`
+	Avatar    string `json:"avatar"`
+	Phone     string `json:"phone" binding:"omitempty"`
+	Location  string `json:"location" binding:"omitempty"`
+	Bio       string `json:"bio" binding:"omitempty"`
+	Interests string `json:"interests" binding:"omitempty"`
+	Role      string `json:"role" binding:"omitempty,oneof=user admin system"`
+	Status    string `json:"status" binding:"omitempty,oneof=active inactive suspended deleted"`
 }
 
 type AdminEventFilter struct {

@@ -112,7 +112,7 @@ func (s *UserService) GetUserByID(id uint) (*models.User, error) {
 }
 
 // update user
-func (s *UserService) UpdateUser(user *models.User) error {
+func (s *UserService) UpdateUserInfo(user *models.User) error {
 	// check if database connection is initialized
 	if s.db == nil {
 		return errors.New("database connection not initialized")

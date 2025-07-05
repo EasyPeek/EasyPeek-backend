@@ -204,27 +204,26 @@ func SetupRoutes() *gin.Engine {
 		admin.Use(middleware.AuthMiddleware())
 		admin.Use(middleware.AdminAuthMiddleware())
 		{
-			// system stats
+			// System Stats
 			admin.GET("/stats", adminHandler.GetSystemStats)
 
-			// 用户管理
+			// User Management
 			users := admin.Group("/users")
 			{
-				users.GET("", adminHandler.GetAllUsers) // 获取所有用户（带过滤）
-				// users.GET("/active", userHandler.GetActiveUsers) // 获取活跃用户（保持兼容）
+				users.GET("", adminHandler.GetAllUsers)
 
+				// get user by username or email
 				users.GET("/:id", adminHandler.GetUserByID)   // get user by ID
 				users.PUT("/:id", adminHandler.UpdateUser)    // 更新用户信息
 				users.DELETE("/:id", adminHandler.DeleteUser) // delete user
-				// 保留原有的单独角色和状态更新接口
-				// users.PUT("/:id/role", userHandler.UpdateUserRole)     // 更新用户角色
-				// users.PUT("/:id/status", userHandler.UpdateUserStatus) // 更新用户状态
 			}
+
 
 			// 事件管理
 			events := admin.Group("/events")
 			{
 				events.GET("", adminHandler.GetAllEvents)       // 获取所有事件
+				events.POST("", adminHandler.CreateEvent)       // 创建事件
 				events.PUT("/:id", adminHandler.UpdateEvent)    // 更新事件
 				events.DELETE("/:id", adminHandler.DeleteEvent) // 删除事件
 			}
@@ -233,6 +232,7 @@ func SetupRoutes() *gin.Engine {
 			news := admin.Group("/news")
 			{
 				news.GET("", adminHandler.GetAllNews)        // 获取所有新闻
+				news.POST("", adminHandler.CreateNews)       // 创建新闻
 				news.PUT("/:id", adminHandler.UpdateNews)    // 更新新闻
 				news.DELETE("/:id", adminHandler.DeleteNews) // 删除新闻
 			}
