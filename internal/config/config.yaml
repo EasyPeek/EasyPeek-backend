@@ -32,7 +32,7 @@ admin:
 # AI服务配置
 ai:
   provider: "openrouter"
-  api_key: "YOUR_VALID_OPENROUTER_API_KEY_HERE" # 请替换为有效的OpenRouter API Key
+  api_key: "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" # 请替换为有效的OpenRouter API Key
   base_url: "https://openrouter.ai/api/v1"
   model: "google/gemini-2.0-flash-001" # 使用更稳定的thinking版本
   timeout: 30 
