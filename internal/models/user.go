@@ -16,7 +16,7 @@ type User struct {
 	Phone     string         `json:"phone"`
 	Location  string         `json:"location"`
 	Bio       string         `json:"bio"`
-	Interests string         `json:"interests"` // JSON字符串存储兴趣偏好数组
+	Interests string         `json:"interests"`
 	Role      string         `json:"role" gorm:"default:user"`
 	Status    string         `json:"status" gorm:"default:active"`
 	CreatedAt time.Time      `json:"created_at"`
@@ -95,8 +95,8 @@ func (u *User) CheckPassword(password string) bool {
 	return err == nil
 }
 
-func (u *User) ToResponse() UserResponse {
-	return UserResponse{
+func (u *User) ToResponse() *UserResponse {
+	return &UserResponse{
 		ID:        u.ID,
 		Username:  u.Username,
 		Email:     u.Email,

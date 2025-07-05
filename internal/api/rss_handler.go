@@ -67,71 +67,33 @@ func (h *RSSHandler) CreateRSSSource(c *gin.Context) {
 	})
 }
 
-// GetRSSSources 获取RSS源列表
-func (h *RSSHandler) GetRSSSources(c *gin.Context) {
+// GetAllRSSSources 获取RSS源列表
+func (h *RSSHandler) GetAllRSSSources(c *gin.Context) {
 	pageStr := c.DefaultQuery("page", "1")
-	limitStr := c.DefaultQuery("limit", "10")
-	category := c.Query("category")
-	isActiveStr := c.Query("is_active")
+	sizeStr := c.DefaultQuery("size", "10")
 
 	page, err := strconv.Atoi(pageStr)
 	if err != nil || page < 1 {
 		page = 1
 	}
 
-	limit, err := strconv.Atoi(limitStr)
-	if err != nil || limit < 1 || limit > 100 {
-		limit = 10
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil || size < 1 || size > 100 {
+		size = 10
 	}
 
-	var isActive *bool
-	if isActiveStr != "" {
-		if isActiveStr == "true" {
-			active := true
-			isActive = &active
-		} else if isActiveStr == "false" {
-			active := false
-			isActive = &active
-		}
-	}
-
-	sources, total, err := h.rssService.GetRSSSourcesWithTotal(page, limit, category, isActive)
+	sources, total, err := h.rssService.GetAllRSSSources(page, size)
 	if err != nil {
 		utils.InternalServerError(c, "Failed to get RSS sources")
 		return
 	}
 
-	// 转换为前端期望的字段名
-	var responseData []map[string]interface{}
+	var RSSSourceResponse []interface{}
 	for _, source := range sources {
-		item := map[string]interface{}{
-			"id":              source.ID,
-			"name":            source.Name,
-			"url":             source.URL,
-			"category":        source.Category,
-			"description":     source.Description,
-			"is_active":       source.IsActive,
-			"fetch_interval":  source.UpdateFreq, // 映射字段名
-			"last_fetch_time": source.LastFetched,
-			"fetch_count":     source.FetchCount,
-			"error_count":     source.ErrorCount,
-			"priority":        source.Priority,
-			"language":        source.Language,
-			"tags":            source.Tags,
-			"created_at":      source.CreatedAt,
-			"updated_at":      source.UpdatedAt,
-		}
-		responseData = append(responseData, item)
+		RSSSourceResponse = append(RSSSourceResponse, source.ToResponse())
 	}
 
-	response := map[string]interface{}{
-		"rss_sources": responseData,
-		"total":       total,
-		"page":        page,
-		"limit":       limit,
-	}
-
-	utils.Success(c, response)
+	utils.SuccessWithPagination(c, RSSSourceResponse, total, page, size)
 }
 
 // UpdateRSSSource 更新RSS源
@@ -159,26 +121,7 @@ func (h *RSSHandler) UpdateRSSSource(c *gin.Context) {
 		return
 	}
 
-	// 转换响应数据，映射字段名
-	responseData := map[string]interface{}{
-		"id":              source.ID,
-		"name":            source.Name,
-		"url":             source.URL,
-		"category":        source.Category,
-		"description":     source.Description,
-		"is_active":       source.IsActive,
-		"fetch_interval":  source.UpdateFreq, // 映射字段名
-		"last_fetch_time": source.LastFetched,
-		"fetch_count":     source.FetchCount,
-		"error_count":     source.ErrorCount,
-		"priority":        source.Priority,
-		"language":        source.Language,
-		"tags":            source.Tags,
-		"created_at":      source.CreatedAt,
-		"updated_at":      source.UpdatedAt,
-	}
-
-	utils.Success(c, responseData)
+	utils.Success(c, source.ToResponse())
 }
 
 // DeleteRSSSource 删除RSS源

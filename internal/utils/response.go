@@ -68,9 +68,9 @@ func SuccessWithPagination(c *gin.Context, data interface{}, total int64, page, 
 	c.JSON(http.StatusOK, PageResponse{
 		Code:    200,
 		Message: "success",
-		Data:    data,
 		Total:   total,
 		Page:    page,
 		Size:    size,
+		Data:    data,
 	})
 }

@@ -38,6 +38,8 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		
+
 		c.Set("user_id", claims.UserID)
 		c.Set("username", claims.Username)
 		c.Set("role", claims.Role)
@@ -73,8 +75,8 @@ func OptionalAuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-// AdminAuthMiddleware 管理员认证中间件
-// 这个中间件必须在 AuthMiddleware 之后使用
+// AdminAuthMiddleware
+// use after AuthMiddleware
 func AdminAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user, err := getUserFromContext(c)
@@ -83,7 +85,6 @@ func AdminAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// 检查用户状态
 		if !validateUserStatus(user) {
 			utils.Forbidden(c, "User account is not active")
 			c.Abort()

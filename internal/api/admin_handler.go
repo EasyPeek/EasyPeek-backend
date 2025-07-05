@@ -79,20 +79,12 @@ func (h *AdminHandler) GetAllUsers(c *gin.Context) {
 		size = 10
 	}
 
-	// 绑定过滤参数
-	var filter services.AdminUserFilter
-	if err := c.ShouldBindQuery(&filter); err != nil {
-		utils.BadRequest(c, "Invalid filter parameters")
-		return
-	}
-
-	users, total, err := h.adminService.GetAllUsers(page, size, filter)
+	users, total, err := h.adminService.GetAllUsers(page, size)
 	if err != nil {
 		utils.InternalServerError(c, err.Error())
 		return
 	}
 
-	// 转换为响应格式
 	var userResponses []interface{}
 	for _, user := range users {
 		userResponses = append(userResponses, user.ToResponse())

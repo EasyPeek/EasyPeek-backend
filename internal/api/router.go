@@ -182,27 +182,24 @@ func SetupRoutes() *gin.Engine {
 		admin.Use(middleware.AuthMiddleware())
 		admin.Use(middleware.AdminAuthMiddleware())
 		{
-			// system stats
+			// System Stats
 			admin.GET("/stats", adminHandler.GetSystemStats)
 
-			// 用户管理
+			// User Management
 			users := admin.Group("/users")
 			{
-				users.GET("", adminHandler.GetAllUsers) // 获取所有用户（带过滤）
-				// users.GET("/active", userHandler.GetActiveUsers) // 获取活跃用户（保持兼容）
+				users.GET("", adminHandler.GetAllUsers)
 
+				// get user by username or email
 				users.GET("/:id", adminHandler.GetUserByID)   // get user by ID
 				users.PUT("/:id", adminHandler.UpdateUser)    // 更新用户信息
 				users.DELETE("/:id", adminHandler.DeleteUser) // delete user
-				// 保留原有的单独角色和状态更新接口
-				// users.PUT("/:id/role", userHandler.UpdateUserRole)     // 更新用户角色
-				// users.PUT("/:id/status", userHandler.UpdateUserStatus) // 更新用户状态
 			}
 
 			// RSS Management
 			rss := admin.Group("/rss")
 			{
-				rss.GET("", rssHandler.GetRSSSources)               // 获取所有RSS源
+				rss.GET("", rssHandler.GetAllRSSSources)            // 获取所有RSS源
 				rss.POST("", rssHandler.CreateRSSSource)            // 创建RSS源
 				rss.PUT("/:id", rssHandler.UpdateRSSSource)         // 更新RSS源
 				rss.DELETE("/:id", rssHandler.DeleteRSSSource)      // 删除RSS源
