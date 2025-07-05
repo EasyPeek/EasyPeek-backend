@@ -3,6 +3,7 @@ package api
 import (
 	"strconv"
 
+	"github.com/EasyPeek/EasyPeek-backend/internal/config"
 	"github.com/EasyPeek/EasyPeek-backend/internal/database"
 	"github.com/EasyPeek/EasyPeek-backend/internal/models"
 	"github.com/EasyPeek/EasyPeek-backend/internal/services"
@@ -20,6 +21,14 @@ type AIHandler struct {
 func NewAIHandler(newsService *services.NewsService) *AIHandler {
 	return &AIHandler{
 		aiService:   services.NewAIService(database.GetDB()),
+		newsService: newsService,
+	}
+}
+
+// NewAIHandlerWithConfig 使用指定配置创建AI处理器实例
+func NewAIHandlerWithConfig(newsService *services.NewsService, cfg *config.Config) *AIHandler {
+	return &AIHandler{
+		aiService:   services.NewAIServiceWithConfig(database.GetDB(), cfg),
 		newsService: newsService,
 	}
 }
@@ -266,14 +275,25 @@ func (h *AIHandler) GetAnalysisStats(c *gin.Context) {
 // @Failure      500  {object}  utils.ErrorResponse
 // @Router       /news/{id}/summarize [post]
 func (h *AIHandler) SummarizeNews(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 64)
-	if err != nil {
-		utils.BadRequest(c, "Invalid news ID")
+	var req struct {
+		NewsID uint `json:"news_id"`
+	}
+
+	// 优先从 JSON 里读取
+	if err := c.ShouldBindJSON(&req); err != nil || req.NewsID == 0 {
+		// 如果 JSON 无效，尝试从 URL 参数获取
+		idStr := c.Param("id")
+		id, err := strconv.ParseUint(idStr, 10, 64)
+		if err != nil || id == 0 {
+			utils.BadRequest(c, "Invalid news ID")
+			return
+		}
+		req.NewsID = uint(id)
+
 		return
 	}
 
-	news, err := h.newsService.GetNewsByID(uint(id))
+	news, err := h.newsService.GetNewsByID(req.NewsID)
 	if err != nil {
 		utils.NotFound(c, "News not found")
 		return
@@ -288,9 +308,33 @@ func (h *AIHandler) SummarizeNews(c *gin.Context) {
 
 	analysis, err := h.aiService.AnalyzeNews(news.ID, analysisReq)
 	if err != nil {
+
 		utils.InternalServerError(c, "Failed to generate summary")
+
 		return
 	}
 
 	utils.Success(c, gin.H{"summary": analysis.Summary})
+}
+
+// BatchAnalyzeUnprocessedNews 批量分析未处理的新闻
+// @Summary 批量分析未处理的新闻
+// @Description 批量分析数据库中未进行AI分析的新闻
+// @Tags AI
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/ai/batch-analyze-unprocessed [post]
+func (h *AIHandler) BatchAnalyzeUnprocessedNews(c *gin.Context) {
+	// 执行批量分析
+	err := h.aiService.BatchAnalyzeUnprocessedNews()
+	if err != nil {
+		utils.InternalServerError(c, "Failed to start batch analysis: "+err.Error())
+		return
+	}
+
+	utils.Success(c, map[string]interface{}{
+		"message": "Batch analysis started successfully",
+		"status":  "processing",
+	})
 }

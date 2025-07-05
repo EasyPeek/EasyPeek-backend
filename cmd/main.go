@@ -23,6 +23,19 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
+	// 调试：检查API Key加载情况
+	if len(cfg.AI.APIKey) > 0 {
+		previewLen := 15
+		if len(cfg.AI.APIKey) < previewLen {
+			previewLen = len(cfg.AI.APIKey)
+		}
+		preview := cfg.AI.APIKey[:previewLen] + "..."
+		log.Printf("🔍 Loaded API Key = %s (length: %d)", preview, len(cfg.AI.APIKey))
+	} else {
+		log.Printf("❌ API Key not loaded or empty")
+	}
+	log.Printf("🔍 Full AI config: Provider=%s, Model=%s, BaseURL=%s", cfg.AI.Provider, cfg.AI.Model, cfg.AI.BaseURL)
+
 	// initialize database
 	if err := database.Initialize(cfg); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
@@ -46,7 +59,7 @@ func main() {
 	// initialize seed data
 	seedService := services.NewSeedService()
 
-	if err := seedService.SeedAllData(); err != nil {
+	if err := seedService.SeedCompleteData(); err != nil {
 		log.Printf("Warning: Failed to seed initial data: %v", err)
 	}
 
@@ -57,19 +70,37 @@ func main() {
 	}
 	defer rssScheduler.Stop()
 
-	// initialize Event scheduler
+	// initialize AI event generation service with config from yaml
+	aiEventConfig := &services.AIEventConfig{
+		Provider:    cfg.AI.Provider,
+		APIKey:      cfg.AI.APIKey,
+		APIEndpoint: cfg.AI.BaseURL + "/chat/completions",
+		Model:       cfg.AI.Model,
+		MaxTokens:   cfg.AI.MaxTokens,
+		Timeout:     cfg.AI.Timeout,
+		Enabled:     true,
+	}
+	aiEventConfig.EventGeneration.Enabled = true
+	aiEventConfig.EventGeneration.ConfidenceThreshold = 0.0
+	aiEventConfig.EventGeneration.MinNewsCount = 2
+	aiEventConfig.EventGeneration.TimeWindowHours = 24
+	aiEventConfig.EventGeneration.MaxNewsLimit = 0 // 0表示不限制，处理所有新闻
+
 	eventScheduler := scheduler.NewEventScheduler()
 	if err := eventScheduler.Start(); err != nil {
 		log.Fatalf("Failed to start Event scheduler: %v", err)
 	}
 	defer eventScheduler.Stop()
 
-	// initialize AI event generation service
-	aiEventService := services.NewAIEventService()
+	aiEventService := services.NewAIEventServiceWithConfig(aiEventConfig)
+	log.Println("AI事件服务配置：使用config.yaml中的AI配置，处理所有未关联的新闻")
 
-	// 配置AI事件服务处理所有未关联的新闻
-	aiEventService.SetMaxNewsLimit(0) // 0表示不限制，处理所有新闻
-	log.Println("AI事件服务配置：处理所有未关联的新闻")
+	// 初始化新闻AI分析调度器
+	newsAnalysisScheduler := scheduler.NewNewsAnalysisScheduler()
+	if err := newsAnalysisScheduler.Start(); err != nil {
+		log.Fatalf("Failed to start News Analysis scheduler: %v", err)
+	}
+	defer newsAnalysisScheduler.Stop()
 
 	// 启动AI事件生成定时器
 	aiEventTicker := time.NewTicker(30 * time.Minute) // 每30分钟执行一次
@@ -124,6 +155,10 @@ func main() {
 		aiEventTicker.Stop()
 		log.Println("AI事件生成定时器已停止")
 
+		// 停止新闻AI分析调度器
+		newsAnalysisScheduler.Stop()
+		log.Println("新闻AI分析调度器已停止")
+
 		// 停止RSS调度器
 		rssScheduler.Stop()
 
@@ -139,6 +174,7 @@ func main() {
 	log.Println("RSS scheduler is running")
 	log.Println("Event scheduler is running (stats update every 2 hours, hotness refresh every 4 hours)")
 	log.Println("AI Event generation service is running (every 30 minutes)")
+	log.Println("News AI Analysis scheduler is running (every 15 minutes)")
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Failed to start server: %v", err)

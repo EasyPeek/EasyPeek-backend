@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/EasyPeek/EasyPeek-backend/internal/middleware"
+	"github.com/EasyPeek/EasyPeek-backend/internal/services"
 	"github.com/gin-gonic/gin"
 )
 
@@ -28,6 +29,10 @@ func SetupRoutes() *gin.Engine {
 	commentHandler := NewCommentHandler()
 	messageHandler := NewMessageHandler()
 	followHandler := NewFollowHandler()
+
+	// initialize services for AI handler
+	newsService := services.NewNewsService()
+	aiHandler := NewAIHandler(newsService)
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")
@@ -177,6 +182,23 @@ func SetupRoutes() *gin.Engine {
 			}
 		}
 
+		// RSS routes
+		rss := v1.Group("/rss")
+		{
+			// 管理员路由
+			adminRSS := rss.Group("")
+			adminRSS.Use(middleware.AuthMiddleware())
+			adminRSS.Use(middleware.RoleMiddleware(middleware.RoleAdmin))
+			{
+				adminRSS.GET("/sources", rssHandler.GetRSSSources)
+				adminRSS.POST("/sources", rssHandler.CreateRSSSource)
+				adminRSS.PUT("/sources/:id", rssHandler.UpdateRSSSource)
+				adminRSS.DELETE("/sources/:id", rssHandler.DeleteRSSSource)
+				adminRSS.POST("/sources/:id/fetch", rssHandler.FetchRSSFeed)
+				adminRSS.POST("/fetch-all", rssHandler.FetchAllRSSFeeds)
+			}
+		}
+
 		// admin routes
 		admin := v1.Group("/admin")
 		admin.Use(middleware.AuthMiddleware())
@@ -196,18 +218,6 @@ func SetupRoutes() *gin.Engine {
 				users.DELETE("/:id", adminHandler.DeleteUser) // delete user
 			}
 
-			// RSS Management
-			rss := admin.Group("/rss")
-			{
-				rss.GET("", rssHandler.GetAllRSSSources)            // 获取所有RSS源
-				rss.POST("", rssHandler.CreateRSSSource)            // 创建RSS源
-				rss.PUT("/:id", rssHandler.UpdateRSSSource)         // 更新RSS源
-				rss.DELETE("/:id", rssHandler.DeleteRSSSource)      // 删除RSS源
-				rss.POST("/:id/fetch", rssHandler.FetchRSSFeed)     // 手动抓取RSS源
-				rss.POST("/fetch-all", rssHandler.FetchAllRSSFeeds) // 抓取所有RSS源
-				rss.GET("/categories", rssHandler.GetRSSCategories) // 获取RSS分类列表
-				rss.GET("/stats", rssHandler.GetRSSStats)           // 获取RSS统计信息
-			}
 
 			// 事件管理
 			events := admin.Group("/events")
@@ -234,11 +244,38 @@ func SetupRoutes() *gin.Engine {
 				comments.DELETE("/:id", commentHandler.AdminDeleteComment) // 管理员删除评论（硬删除）
 			}
 
+			// RSS源管理
+			rssAdmin := admin.Group("/rss-sources")
+			{
+				rssAdmin.GET("", rssHandler.GetRSSSources)                             // 获取所有RSS源
+				rssAdmin.POST("", rssHandler.CreateRSSSource)                          // 创建RSS源
+				rssAdmin.PUT("/:id", rssHandler.UpdateRSSSource)                       // 更新RSS源
+				rssAdmin.DELETE("/:id", rssHandler.DeleteRSSSource)                    // 删除RSS源
+				rssAdmin.POST("/:id/fetch", rssHandler.FetchRSSFeed)                   // 手动抓取RSS源
+				rssAdmin.POST("/fetch-all", rssHandler.FetchAllRSSFeeds)               // 抓取所有RSS源
+				rssAdmin.POST("/batch-analyze", aiHandler.BatchAnalyzeUnprocessedNews) // 批量AI分析未处理新闻
+				rssAdmin.GET("/categories", rssHandler.GetRSSCategories)               // 获取RSS分类列表
+				rssAdmin.GET("/stats", rssHandler.GetRSSStats)                         // 获取RSS统计信息
+			}
+
 			// 消息管理
 			messageAdmin := admin.Group("/messages")
 			{
 				messageAdmin.POST("", messageHandler.CreateMessage) // 创建系统消息
 			}
+		}
+
+		// AI routes
+		ai := v1.Group("/ai")
+		{
+			// 公开路由
+			ai.POST("/analyze", aiHandler.AnalyzeNews)                                   // 分析新闻
+			ai.POST("/analyze-event", aiHandler.AnalyzeEvent)                            // 分析事件
+			ai.GET("/analysis", aiHandler.GetAnalysis)                                   // 获取分析结果
+			ai.POST("/batch-analyze", aiHandler.BatchAnalyzeNews)                        // 批量分析指定新闻
+			ai.POST("/batch-analyze-unprocessed", aiHandler.BatchAnalyzeUnprocessedNews) // 批量分析未处理新闻
+			ai.GET("/stats", aiHandler.GetAnalysisStats)                                 // 获取分析统计
+			ai.POST("/summarize", aiHandler.SummarizeNews)                               // 快速摘要
 		}
 
 	}

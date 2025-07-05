@@ -255,7 +255,7 @@ func (s *RSSService) FetchRSSFeed(sourceID uint) (*models.RSSFetchStats, error) 
 			log.Printf("[RSS DEBUG] Updated existing news item: %s", item.Title)
 		}
 
-		// 自动计算热度
+		// 计算新闻热度
 		if newsItem != nil {
 			if err := s.calculateNewsHotness(newsItem.ID); err != nil {
 				log.Printf("[RSS WARNING] Failed to calculate hotness for news item %d: %v", newsItem.ID, err)
@@ -485,9 +485,9 @@ func (s *RSSService) processNewsItem(source *models.RSSSource, item *gofeed.Item
 	}
 
 	// 提取分类
-	categories := make([]string, 0)
-	for _, cat := range item.Categories {
-		categories = append(categories, s.cleanUTF8(cat))
+	categories := make([]string, len(item.Categories))
+	for i, cat := range item.Categories {
+		categories[i] = s.cleanUTF8(cat)
 	}
 	categoryStr := strings.Join(categories, ",")
 	if categoryStr == "" {
@@ -615,6 +615,9 @@ func (s *RSSService) processNewsItem(source *models.RSSSource, item *gofeed.Item
 		}
 		newsItem = existingItem
 	}
+
+	// 新闻数据保存完成
+	log.Printf("[RSS DEBUG] 新闻已保存到数据库，ID: %d", newsItem.ID)
 
 	return &newsItem, isNew, nil
 }
@@ -916,25 +919,3 @@ func (s *RSSService) GetRSSStats() (*RSSStats, error) {
 	return stats, nil
 }
 
-// convertToNewsItemResponse 函数已删除，现在直接使用 News.ToResponse() 方法
-
-// 转换函数
-func (s *RSSService) convertToRSSSourceResponse(source *models.RSSSource) *models.RSSSourceResponse {
-	return &models.RSSSourceResponse{
-		ID:          source.ID,
-		Name:        source.Name,
-		URL:         source.URL,
-		Category:    source.Category,
-		Language:    source.Language,
-		IsActive:    source.IsActive,
-		LastFetched: source.LastFetched,
-		FetchCount:  source.FetchCount,
-		ErrorCount:  source.ErrorCount,
-		Description: source.Description,
-		Tags:        source.Tags,
-		Priority:    source.Priority,
-		UpdateFreq:  source.UpdateFreq,
-		CreatedAt:   source.CreatedAt,
-		UpdatedAt:   source.UpdatedAt,
-	}
-}

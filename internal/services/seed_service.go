@@ -336,16 +336,19 @@ func (s *SeedService) SeedRSSources() error {
 			UpdateFreq:  60,
 		},
 		{
+
 			Name:        "光明日报",
 			URL:         "https://feedx.net/rss/guangmingribao.xml",
 			Category:    "时政新闻",
 			Language:    "zh",
 			IsActive:    true,
 			Description: "光明日报全文RSS源，提供权威时政和文化新闻",
-			Priority:    1,
-			UpdateFreq:  60,
+
+			Priority:   1,
+			UpdateFreq: 60,
 		},
 		{
+
 			Name:        "新华每日电讯",
 			URL:         "https://feedx.net/rss/mrdx.xml",
 			Category:    "时政新闻",
@@ -356,16 +359,19 @@ func (s *SeedService) SeedRSSources() error {
 			UpdateFreq:  60,
 		},
 		{
+
 			Name:        "经济日报",
 			URL:         "https://feedx.net/rss/jingjiribao.xml",
 			Category:    "财经新闻",
 			Language:    "zh",
 			IsActive:    true,
 			Description: "经济日报全文RSS源，提供权威财经和经济政策新闻",
-			Priority:    1,
-			UpdateFreq:  60,
+
+			Priority:   1,
+			UpdateFreq: 60,
 		},
 		{
+
 			Name:        "南方周末",
 			URL:         "https://feedx.net/rss/infzm.xml",
 			Category:    "时政新闻",
