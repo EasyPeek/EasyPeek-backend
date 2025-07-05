@@ -202,6 +202,13 @@ func (h *AdminHandler) GetAllEvents(c *gin.Context) {
 	utils.SuccessWithPagination(c, eventResponses, total, page, size)
 }
 
+// CreateEvent 创建事件（管理员）
+func (h *AdminHandler) CreateEvent(c *gin.Context) {
+	// 复用现有的 EventHandler 的 CreateEvent 方法
+	eventHandler := NewEventHandler()
+	eventHandler.CreateEvent(c)
+}
+
 // UpdateEvent 更新事件（管理员）
 func (h *AdminHandler) UpdateEvent(c *gin.Context) {
 	// 复用现有的 EventHandler 的 UpdateEvent 方法
@@ -252,6 +259,13 @@ func (h *AdminHandler) GetAllNews(c *gin.Context) {
 	}
 
 	utils.SuccessWithPagination(c, newsResponses, total, page, size)
+}
+
+// CreateNews 创建新闻（管理员）
+func (h *AdminHandler) CreateNews(c *gin.Context) {
+	// 复用现有的新闻创建逻辑
+	newsHandler := NewNewsHandler()
+	newsHandler.CreateNews(c)
 }
 
 // UpdateNews 更新新闻（管理员）

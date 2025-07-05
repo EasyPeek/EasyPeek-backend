@@ -213,6 +213,7 @@ func SetupRoutes() *gin.Engine {
 			events := admin.Group("/events")
 			{
 				events.GET("", adminHandler.GetAllEvents)       // 获取所有事件
+				events.POST("", adminHandler.CreateEvent)       // 创建事件
 				events.PUT("/:id", adminHandler.UpdateEvent)    // 更新事件
 				events.DELETE("/:id", adminHandler.DeleteEvent) // 删除事件
 			}
@@ -221,6 +222,7 @@ func SetupRoutes() *gin.Engine {
 			news := admin.Group("/news")
 			{
 				news.GET("", adminHandler.GetAllNews)        // 获取所有新闻
+				news.POST("", adminHandler.CreateNews)       // 创建新闻
 				news.PUT("/:id", adminHandler.UpdateNews)    // 更新新闻
 				news.DELETE("/:id", adminHandler.DeleteNews) // 删除新闻
 			}
