@@ -190,7 +190,7 @@ func SetupRoutes() *gin.Engine {
 			adminRSS.Use(middleware.AuthMiddleware())
 			adminRSS.Use(middleware.RoleMiddleware(middleware.RoleAdmin))
 			{
-				adminRSS.GET("/sources", rssHandler.GetRSSSources)
+				adminRSS.GET("/sources", rssHandler.GetAllRSSSources)
 				adminRSS.POST("/sources", rssHandler.CreateRSSSource)
 				adminRSS.PUT("/sources/:id", rssHandler.UpdateRSSSource)
 				adminRSS.DELETE("/sources/:id", rssHandler.DeleteRSSSource)
@@ -217,7 +217,6 @@ func SetupRoutes() *gin.Engine {
 				users.PUT("/:id", adminHandler.UpdateUser)    // 更新用户信息
 				users.DELETE("/:id", adminHandler.DeleteUser) // delete user
 			}
-
 
 			// 事件管理
 			events := admin.Group("/events")
@@ -247,7 +246,7 @@ func SetupRoutes() *gin.Engine {
 			// RSS源管理
 			rssAdmin := admin.Group("/rss-sources")
 			{
-				rssAdmin.GET("", rssHandler.GetRSSSources)                             // 获取所有RSS源
+				rssAdmin.GET("", rssHandler.GetAllRSSSources)                          // 获取所有RSS源
 				rssAdmin.POST("", rssHandler.CreateRSSSource)                          // 创建RSS源
 				rssAdmin.PUT("/:id", rssHandler.UpdateRSSSource)                       // 更新RSS源
 				rssAdmin.DELETE("/:id", rssHandler.DeleteRSSSource)                    // 删除RSS源
