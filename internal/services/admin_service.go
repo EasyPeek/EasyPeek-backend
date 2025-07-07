@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"log"
 
 	"github.com/EasyPeek/EasyPeek-backend/internal/database"
 	"github.com/EasyPeek/EasyPeek-backend/internal/models"
@@ -300,6 +301,54 @@ func (s *AdminService) GetAllNews(page, pageSize int, filter AdminNewsFilter) ([
 	}
 
 	return news, total, nil
+}
+
+// ClearAllEvents 清空所有事件
+func (s *AdminService) ClearAllEvents() (int64, error) {
+	if s.db == nil {
+		return 0, errors.New("database connection not initialized")
+	}
+
+	// 使用事务确保数据一致性
+	var deletedCount int64
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// 首先计算要删除的事件数量
+		var count int64
+		if err := tx.Model(&models.Event{}).Count(&count).Error; err != nil {
+			log.Printf("[ADMIN CLEAR] 获取事件数量失败: %v", err)
+			return err
+		}
+		deletedCount = count
+		log.Printf("[ADMIN CLEAR] 准备清空 %d 个事件", deletedCount)
+
+		// 先清理相关的新闻关联（将belonged_event_id设置为NULL）
+		// 这必须在删除事件之前进行，避免外键约束冲突
+		var newsUpdateCount int64
+		result := tx.Model(&models.News{}).Where("belonged_event_id IS NOT NULL").Update("belonged_event_id", nil)
+		if result.Error != nil {
+			log.Printf("[ADMIN CLEAR] 清理新闻关联失败: %v", result.Error)
+			return result.Error
+		}
+		newsUpdateCount = result.RowsAffected
+		log.Printf("[ADMIN CLEAR] 成功清理 %d 条新闻的事件关联", newsUpdateCount)
+
+		// 然后删除所有事件（硬删除）
+		if err := tx.Unscoped().Delete(&models.Event{}, "1=1").Error; err != nil {
+			log.Printf("[ADMIN CLEAR] 删除事件失败: %v", err)
+			return err
+		}
+		log.Printf("[ADMIN CLEAR] 成功删除所有事件")
+
+		return nil
+	})
+
+	if err != nil {
+		log.Printf("[ADMIN CLEAR ERROR] 清空事件事务失败: %v", err)
+		return 0, err
+	}
+
+	log.Printf("[ADMIN CLEAR SUCCESS] 成功清空 %d 个事件", deletedCount)
+	return deletedCount, nil
 }
 
 // ===== 数据类型定义 =====

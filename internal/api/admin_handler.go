@@ -220,8 +220,28 @@ func (h *AdminHandler) UpdateEvent(c *gin.Context) {
 
 // DeleteEvent 删除事件（管理员）
 func (h *AdminHandler) DeleteEvent(c *gin.Context) {
+	log.Printf("[ADMIN] 管理员删除事件请求，URL: %s", c.Request.URL.Path)
+
 	eventHandler := NewEventHandler()
 	eventHandler.DeleteEvent(c)
+}
+
+// ClearAllEvents 清空所有事件（管理员）
+func (h *AdminHandler) ClearAllEvents(c *gin.Context) {
+	log.Printf("[ADMIN] 管理员清空所有事件请求")
+
+	deletedCount, err := h.adminService.ClearAllEvents()
+	if err != nil {
+		log.Printf("[ADMIN ERROR] 清空事件失败: %v", err)
+		utils.InternalServerError(c, "清空事件失败: "+err.Error())
+		return
+	}
+
+	log.Printf("[ADMIN SUCCESS] 成功清空 %d 个事件", deletedCount)
+	utils.Success(c, gin.H{
+		"message":       "清空事件成功",
+		"deleted_count": deletedCount,
+	})
 }
 
 // ===== 新闻管理 =====

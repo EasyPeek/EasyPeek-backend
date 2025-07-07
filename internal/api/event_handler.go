@@ -1,6 +1,8 @@
 package api
 
 import (
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -166,7 +168,7 @@ func (h *EventHandler) UpdateEvent(c *gin.Context) {
 
 // DeleteEvent 删除事件
 // @Summary 删除事件
-// @Description 删除指定ID的事件（软删除）
+// @Description 删除指定的事件
 // @Tags events
 // @Produce json
 // @Param id path int true "事件ID"
@@ -174,26 +176,47 @@ func (h *EventHandler) UpdateEvent(c *gin.Context) {
 // @Failure 400 {object} utils.Response
 // @Failure 404 {object} utils.Response
 // @Failure 500 {object} utils.Response
-// @Security BearerAuth
 // @Router /api/v1/events/{id} [delete]
 func (h *EventHandler) DeleteEvent(c *gin.Context) {
 	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		utils.BadRequest(c, "Invalid event ID")
+	log.Printf("[EVENT DELETE] 接收到删除请求，ID参数: '%s'", idStr)
+
+	// 检查ID是否为空
+	if idStr == "" {
+		log.Printf("[EVENT DELETE ERROR] ID参数为空")
+		utils.BadRequest(c, "Event ID is required")
 		return
 	}
 
+	// 尝试解析ID
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		log.Printf("[EVENT DELETE ERROR] 无法解析ID '%s': %v", idStr, err)
+		utils.BadRequest(c, fmt.Sprintf("Invalid event ID format: %s", idStr))
+		return
+	}
+
+	// 检查ID是否有效
+	if id == 0 {
+		log.Printf("[EVENT DELETE ERROR] ID为0")
+		utils.BadRequest(c, "Event ID cannot be zero")
+		return
+	}
+
+	log.Printf("[EVENT DELETE] 开始删除事件，ID: %d", id)
+
 	err = h.eventService.DeleteEvent(uint(id))
 	if err != nil {
+		log.Printf("[EVENT DELETE ERROR] 删除事件失败，ID: %d, 错误: %v", id, err)
 		if err.Error() == "event not found" {
 			utils.NotFound(c, "Event not found")
 			return
 		}
-		utils.InternalServerError(c, "Failed to delete event")
+		utils.InternalServerError(c, "Failed to delete event: "+err.Error())
 		return
 	}
 
+	log.Printf("[EVENT DELETE SUCCESS] 成功删除事件，ID: %d", id)
 	utils.Success(c, gin.H{"message": "Event deleted successfully"})
 }
 

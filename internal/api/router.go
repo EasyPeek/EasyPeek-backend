@@ -225,6 +225,7 @@ func SetupRoutes() *gin.Engine {
 				events.POST("", adminHandler.CreateEvent)       // 创建事件
 				events.PUT("/:id", adminHandler.UpdateEvent)    // 更新事件
 				events.DELETE("/:id", adminHandler.DeleteEvent) // 删除事件
+				events.DELETE("", adminHandler.ClearAllEvents)  // 清空所有事件
 			}
 
 			// 新闻管理

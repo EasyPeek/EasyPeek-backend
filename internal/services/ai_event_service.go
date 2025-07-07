@@ -239,7 +239,7 @@ func DefaultAIEventConfig() *AIEventConfig {
 
 	config.EventGeneration.Enabled = true
 	config.EventGeneration.ConfidenceThreshold = 0.7 // 提高阈值确保聚类质量
-	config.EventGeneration.MinNewsCount = 3          // 至少3条新闻才生成事件
+	config.EventGeneration.MinNewsCount = 1          // 任何数量的新闻都可以生成事件
 	config.EventGeneration.TimeWindowHours = 168     // 扩展到一周时间窗口，处理更长时间范围的新闻
 
 	// 设置为0表示不限制数量，处理所有未关联的新闻
@@ -394,10 +394,16 @@ func (s *AIEventService) GenerateEventsFromNews() error {
 	// 按主题对新闻进行严格聚类
 	topicGroups := s.classifyNewsByTopic(newsList)
 
-	// 第三步：为每个主题下的新闻按时间窗口分组，生成新事件
-	// timeWindow已经在前面定义过了
+	// 获取现有的主题事件映射
+	existingTopicEvents, err := s.getExistingTopicEvents()
+	if err != nil {
+		log.Printf("获取现有主题事件失败: %v", err)
+		return err
+	}
 
 	generatedCount := 0
+	linkedCount := 0
+
 	for topicName, topicNews := range topicGroups {
 		if len(topicNews) == 0 {
 			continue
@@ -405,41 +411,75 @@ func (s *AIEventService) GenerateEventsFromNews() error {
 
 		log.Printf("处理主题: %s, 新闻数量: %d", topicName, len(topicNews))
 
-		// 不再按时间窗口分组，直接处理整个主题的新闻
-		if len(topicNews) < s.config.EventGeneration.MinNewsCount {
-			log.Printf("主题 %s 新闻数量不足 (%d < %d)，跳过",
-				topicName, len(topicNews), s.config.EventGeneration.MinNewsCount)
-			continue
+		// 检查该主题是否已经存在事件
+		if existingEvent, exists := existingTopicEvents[topicName]; exists {
+			// 将该主题的所有新闻关联到现有事件
+			for _, news := range topicNews {
+				if err := s.linkNewsToEvent(news.ID, existingEvent.ID); err != nil {
+					log.Printf("关联新闻 %d 到现有事件 %d 失败: %v", news.ID, existingEvent.ID, err)
+				} else {
+					linkedCount++
+				}
+			}
+			log.Printf("主题 %s 已存在事件 '%s'，关联了 %d 条新闻", topicName, existingEvent.Title, len(topicNews))
+		} else {
+			// 该主题不存在事件，创建新事件
+			log.Printf("主题 %s 不存在事件，创建新事件，新闻数量: %d", topicName, len(topicNews))
+
+			// 为主题内所有新闻生成一个事件
+			eventMapping, err := s.generateEventFromNewsGroup(topicNews)
+			if err != nil {
+				log.Printf("为主题 %s 生成事件失败: %v", topicName, err)
+				continue
+			}
+
+			if eventMapping == nil {
+				log.Printf("主题 %s 不需要生成事件", topicName)
+				continue
+			}
+
+			// 设置事件分类为主题名称
+			eventMapping.EventData.Category = topicName
+
+			// 创建事件并关联新闻
+			if err := s.createEventAndLinkNews(eventMapping); err != nil {
+				log.Printf("创建事件并关联新闻失败: %v", err)
+				continue
+			}
+
+			generatedCount++
+			log.Printf("主题 %s 成功创建新事件: %s", topicName, eventMapping.EventData.Title)
 		}
-
-		log.Printf("处理主题 %s: 新闻数量: %d", topicName, len(topicNews))
-
-		// 为主题内所有新闻生成一个事件
-		eventMapping, err := s.generateEventFromNewsGroup(topicNews)
-		if err != nil {
-			log.Printf("为主题 %s 生成事件失败: %v", topicName, err)
-			continue
-		}
-
-		if eventMapping == nil {
-			log.Printf("主题 %s 不需要生成事件", topicName)
-			continue
-		}
-
-		// 设置事件分类为主题名称
-		eventMapping.EventData.Category = topicName
-
-		// 创建事件并关联新闻
-		if err := s.createEventAndLinkNews(eventMapping); err != nil {
-			log.Printf("创建事件并关联新闻失败: %v", err)
-			continue
-		}
-
-		generatedCount++
 	}
 
-	log.Printf("事件处理完成！处理了 %d 条新闻，生成新事件: %d 个", len(newsList), generatedCount)
+	log.Printf("事件处理完成！处理了 %d 条新闻，生成新事件: %d 个，关联到现有事件: %d 条新闻", len(newsList), generatedCount, linkedCount)
 	return nil
+}
+
+// getExistingTopicEvents 获取现有的主题事件映射
+func (s *AIEventService) getExistingTopicEvents() (map[string]models.Event, error) {
+	var events []models.Event
+	// 获取所有未结束的事件，按分类分组
+	if err := s.db.Where("status != ?", "已结束").Find(&events).Error; err != nil {
+		return nil, fmt.Errorf("查询现有事件失败: %w", err)
+	}
+
+	topicEventMap := make(map[string]models.Event)
+	for _, event := range events {
+		if event.Category != "" {
+			// 如果该主题还没有事件，或者当前事件更新，则使用当前事件
+			if existingEvent, exists := topicEventMap[event.Category]; !exists || event.UpdatedAt.After(existingEvent.UpdatedAt) {
+				topicEventMap[event.Category] = event
+			}
+		}
+	}
+
+	log.Printf("找到现有主题事件 %d 个", len(topicEventMap))
+	for topic, event := range topicEventMap {
+		log.Printf("  主题: %s -> 事件: %s (ID: %d)", topic, event.Title, event.ID)
+	}
+
+	return topicEventMap, nil
 }
 
 // groupNewsByCategoryWithTimeWindow 按类别和时间窗口分组新闻
@@ -513,7 +553,7 @@ func (s *AIEventService) groupNewsByTimeWindow(newsList []models.News, window ti
 
 // generateEventFromNewsGroup 从新闻组生成事件
 func (s *AIEventService) generateEventFromNewsGroup(newsList []models.News) (*EventMapping, error) {
-	if len(newsList) < s.config.EventGeneration.MinNewsCount {
+	if len(newsList) == 0 {
 		return nil, nil
 	}
 
@@ -916,7 +956,6 @@ func (s *AIEventService) tryLinkNewsToExistingEvents(newsList []models.News) ([]
 	thirtyDaysAgo := time.Now().AddDate(0, 0, -30)
 	if err := s.db.Where("created_at > ? AND status != ?", thirtyDaysAgo, "已结束").
 		Order("created_at DESC").
-		Limit(100). // 限制检查的事件数量
 		Find(&recentEvents).Error; err != nil {
 		log.Printf("获取近期事件失败: %v", err)
 		return newsList, 0 // 如果获取失败，返回所有新闻用于新事件生成
