@@ -438,8 +438,9 @@ func (s *AIEventService) GenerateEventsFromNews() error {
 				continue
 			}
 
-			// 设置事件分类为主题名称
+			// 设置事件分类和标题为主题名称
 			eventMapping.EventData.Category = topicName
+			eventMapping.EventData.Title = topicName // 直接使用主题名称作为事件标题
 
 			// 创建事件并关联新闻
 			if err := s.createEventAndLinkNews(eventMapping); err != nil {
@@ -1195,47 +1196,13 @@ func (s *AIEventService) calculateTopicMatchScore(news models.News, topic TopicC
 
 // generateSmartEventTitle 基于新闻内容和主题生成智能事件标题
 func (s *AIEventService) generateSmartEventTitle(articles []NewsArticle, category string) string {
-	if len(articles) == 0 {
-		return fmt.Sprintf("%s相关事件", category)
+	// 直接返回主题分类名称作为事件标题
+	if category != "" {
+		return category
 	}
 
-	// 提取关键词频次
-	keywordFreq := make(map[string]int)
-	for _, article := range articles {
-		// 从标题中提取关键词
-		titleKeywords := s.extractTitleKeywords(article.Title)
-		for keyword, freq := range titleKeywords {
-			if s.isValidKeyword(keyword) && len(keyword) > 1 {
-				keywordFreq[keyword] += freq
-			}
-		}
-	}
-
-	// 找出最高频的关键词
-	var topKeywords []string
-	maxFreq := 0
-	for keyword, freq := range keywordFreq {
-		if freq > maxFreq {
-			maxFreq = freq
-			topKeywords = []string{keyword}
-		} else if freq == maxFreq {
-			topKeywords = append(topKeywords, keyword)
-		}
-	}
-
-	// 根据主题和关键词生成标题
-	if len(topKeywords) > 0 && maxFreq > 1 {
-		// 如果有多个相同频次的关键词，选择第一个
-		mainKeyword := topKeywords[0]
-		return fmt.Sprintf("%s：%s相关动态", category, mainKeyword)
-	}
-
-	// 如果没有找到高频关键词，使用时间范围
-	if len(articles) > 1 {
-		return fmt.Sprintf("%s：近期重要发展", category)
-	}
-
-	return fmt.Sprintf("%s相关事件", category)
+	// 如果没有分类，返回默认标题
+	return "综合新闻"
 }
 
 // generateSmartEventDescription 基于新闻内容和主题生成智能事件描述

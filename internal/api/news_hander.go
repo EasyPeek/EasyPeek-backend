@@ -191,6 +191,9 @@ func (h *NewsHandler) SearchNews(c *gin.Context) {
 		return
 	}
 
+	// 获取搜索模式参数
+	searchMode := c.DefaultQuery("mode", "normal") // normal, semantic, keywords
+
 	// 获取查询参数中的页码和每页大小，并设置默认值
 	pageStr := c.DefaultQuery("page", "1")
 	sizeStr := c.DefaultQuery("size", "10")
@@ -205,8 +208,8 @@ func (h *NewsHandler) SearchNews(c *gin.Context) {
 		size = 10
 	}
 
-	// 调用 NewsService 的 SearchNews 方法进行搜索
-	newsList, total, err := h.newsService.SearchNews(queryStr, page, size)
+	// 调用 NewsService 的增强搜索方法进行搜索
+	newsList, total, err := h.newsService.SearchNewsWithMode(queryStr, searchMode, page, size)
 	if err != nil {
 		utils.InternalServerError(c, err.Error()) // 数据库或其他内部错误
 		return

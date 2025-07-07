@@ -905,9 +905,14 @@ func (s *EventService) clusterNewsByTitle(newsList []models.News) []*EventCluste
 			continue
 		}
 
-		// 创建新聚类
+		// 创建新聚类，使用分类作为标题
+		eventTitle := news.Category
+		if eventTitle == "" || eventTitle == "未分类" {
+			eventTitle = "综合新闻"
+		}
+
 		cluster := &EventCluster{
-			Title:        news.Title,
+			Title:        eventTitle,
 			Description:  news.Summary,
 			Category:     news.Category,
 			StartTime:    news.PublishedAt,

@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt" // 导入 fmt 包用于错误信息拼接
+	"strings"
 	"time"
 
 	"github.com/EasyPeek/EasyPeek-backend/internal/database" // 假设你的数据库连接在此处提供
@@ -223,6 +224,107 @@ func (s *NewsService) SearchNews(query string, page, pageSize int) ([]models.New
 	}
 
 	return newsList, total, nil
+}
+
+// SearchNewsWithMode 支持多种搜索模式的新闻搜索
+func (s *NewsService) SearchNewsWithMode(query, mode string, page, pageSize int) ([]models.News, int64, error) {
+	// 检查数据库连接是否已初始化
+	if s.db == nil {
+		return nil, 0, errors.New("database connection not initialized")
+	}
+
+	var newsList []models.News
+	var total int64
+	var dbQuery *gorm.DB
+
+	// 根据搜索模式构建不同的查询
+	switch mode {
+	case "keywords":
+		// 关键词搜索：精确匹配，空格分隔的关键词都必须包含
+		keywords := strings.Fields(query) // 分割关键词
+		if len(keywords) == 0 {
+			return []models.News{}, 0, nil
+		}
+
+		dbQuery = s.db.Model(&models.News{}).Where("is_active = ?", true)
+
+		// 每个关键词都必须在标题、内容或摘要中出现
+		for _, keyword := range keywords {
+			searchTerm := "%" + keyword + "%"
+			dbQuery = dbQuery.Where("(title ILIKE ? OR content ILIKE ? OR summary ILIKE ?)",
+				searchTerm, searchTerm, searchTerm)
+		}
+
+		// 按创建时间排序（关键词搜索已经通过多重WHERE条件保证了相关性）
+		dbQuery = dbQuery.Order("created_at DESC")
+
+	case "semantic":
+		// 语义搜索：扩展查询，包含同义词和相关概念
+		expandedQuery := expandSemanticQuery(query)
+		searchQuery := "%" + expandedQuery + "%"
+
+		dbQuery = s.db.Model(&models.News{}).
+			Where("is_active = ? AND (title ILIKE ? OR content ILIKE ? OR summary ILIKE ? OR tags ILIKE ?)",
+				true, searchQuery, searchQuery, searchQuery, searchQuery).
+			Order("created_at DESC")
+
+	default: // normal 模式
+		// 普通搜索：模糊匹配
+		searchQuery := "%" + query + "%"
+		dbQuery = s.db.Model(&models.News{}).
+			Where("is_active = ? AND (title ILIKE ? OR content ILIKE ? OR summary ILIKE ?)",
+				true, searchQuery, searchQuery, searchQuery).
+			Order("created_at DESC")
+	}
+
+	// 计算符合条件的记录总数
+	if err := dbQuery.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count search results: %w", err)
+	}
+
+	// 计算分页偏移量
+	offset := (page - 1) * pageSize
+	if offset < 0 {
+		offset = 0
+	}
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+
+	// 执行带分页的搜索查询
+	if err := dbQuery.Offset(offset).Limit(pageSize).Find(&newsList).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to search news with pagination: %w", err)
+	}
+
+	return newsList, total, nil
+}
+
+// expandSemanticQuery 扩展语义查询，添加相关关键词
+func expandSemanticQuery(query string) string {
+	// 简单的语义扩展映射
+	semanticMap := map[string][]string{
+		"人工智能": {"AI", "机器学习", "深度学习", "神经网络", "算法"},
+		"AI":   {"人工智能", "机器学习", "深度学习", "智能"},
+		"科技":   {"技术", "创新", "发明", "研发", "数字化"},
+		"经济":   {"财经", "金融", "投资", "市场", "贸易"},
+		"环保":   {"环境", "绿色", "生态", "可持续", "节能"},
+		"医疗":   {"健康", "医院", "药物", "治疗", "疾病"},
+		"教育":   {"学习", "学校", "培训", "知识", "学术"},
+		"新能源":  {"清洁能源", "太阳能", "风能", "电动", "绿色能源"},
+	}
+
+	expandedTerms := []string{query}
+	queryLower := strings.ToLower(query)
+
+	// 查找相关词汇
+	for key, synonyms := range semanticMap {
+		if strings.Contains(queryLower, strings.ToLower(key)) {
+			expandedTerms = append(expandedTerms, synonyms...)
+		}
+	}
+
+	// 返回扩展后的查询字符串
+	return strings.Join(expandedTerms, " ")
 }
 
 // UpdateNewsEventAssociation 批量更新新闻的关联事件ID

@@ -321,15 +321,25 @@ func (s *AdminService) ClearAllEvents() (int64, error) {
 		deletedCount = count
 		log.Printf("[ADMIN CLEAR] 准备清空 %d 个事件", deletedCount)
 
-		// 先清理相关的新闻关联（将belonged_event_id设置为NULL）
+		// 先清理相关的关注记录（删除所有对事件的关注）
 		// 这必须在删除事件之前进行，避免外键约束冲突
-		var newsUpdateCount int64
-		result := tx.Model(&models.News{}).Where("belonged_event_id IS NOT NULL").Update("belonged_event_id", nil)
-		if result.Error != nil {
-			log.Printf("[ADMIN CLEAR] 清理新闻关联失败: %v", result.Error)
-			return result.Error
+		var followDeleteCount int64
+		followResult := tx.Unscoped().Delete(&models.Follow{}, "1=1")
+		if followResult.Error != nil {
+			log.Printf("[ADMIN CLEAR] 清理关注记录失败: %v", followResult.Error)
+			return followResult.Error
 		}
-		newsUpdateCount = result.RowsAffected
+		followDeleteCount = followResult.RowsAffected
+		log.Printf("[ADMIN CLEAR] 成功清理 %d 条关注记录", followDeleteCount)
+
+		// 然后清理相关的新闻关联（将belonged_event_id设置为NULL）
+		var newsUpdateCount int64
+		newsResult := tx.Model(&models.News{}).Where("belonged_event_id IS NOT NULL").Update("belonged_event_id", nil)
+		if newsResult.Error != nil {
+			log.Printf("[ADMIN CLEAR] 清理新闻关联失败: %v", newsResult.Error)
+			return newsResult.Error
+		}
+		newsUpdateCount = newsResult.RowsAffected
 		log.Printf("[ADMIN CLEAR] 成功清理 %d 条新闻的事件关联", newsUpdateCount)
 
 		// 然后删除所有事件（硬删除）
