@@ -262,6 +262,15 @@ func SetupRoutes() *gin.Engine {
 			{
 				messageAdmin.POST("", messageHandler.CreateMessage) // 创建系统消息
 			}
+
+			// AI配置管理
+			aiAdmin := admin.Group("/ai-config")
+			{
+				aiAdmin.GET("", adminHandler.GetAIConfig)                             // 获取AI配置状态
+				aiAdmin.PUT("", adminHandler.UpdateAIConfig)                          // 更新AI配置
+				aiAdmin.POST("/batch-analyze", adminHandler.TriggerBatchAIAnalysis)   // 手动触发批量AI分析
+				aiAdmin.POST("/generate-events", adminHandler.TriggerEventGeneration) // 手动触发事件生成
+			}
 		}
 
 		// AI routes

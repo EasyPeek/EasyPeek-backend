@@ -1,8 +1,10 @@
 package api
 
 import (
+	"log"
 	"strconv"
 
+	"github.com/EasyPeek/EasyPeek-backend/internal/database"
 	"github.com/EasyPeek/EasyPeek-backend/internal/models"
 	"github.com/EasyPeek/EasyPeek-backend/internal/services"
 	"github.com/EasyPeek/EasyPeek-backend/internal/utils"
@@ -280,4 +282,78 @@ func (h *AdminHandler) DeleteNews(c *gin.Context) {
 	// 复用现有的新闻删除逻辑
 	newsHandler := NewNewsHandler()
 	newsHandler.DeleteNews(c)
+}
+
+// ===== AI配置管理 =====
+
+// GetAIConfig 获取AI配置状态
+func (h *AdminHandler) GetAIConfig(c *gin.Context) {
+	config := h.rssService.GetAIConfig()
+	utils.Success(c, config)
+}
+
+// UpdateAIConfig 更新AI配置
+func (h *AdminHandler) UpdateAIConfig(c *gin.Context) {
+	var req struct {
+		AIAnalysisEnabled      bool `json:"ai_analysis_enabled"`
+		EventGenerationEnabled bool `json:"event_generation_enabled"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Invalid request data: "+err.Error())
+		return
+	}
+
+	// 更新配置
+	h.rssService.SetAIAnalysisEnabled(req.AIAnalysisEnabled)
+	h.rssService.SetEventGenerationEnabled(req.EventGenerationEnabled)
+
+	// 返回更新后的配置
+	config := h.rssService.GetAIConfig()
+	utils.Success(c, gin.H{
+		"message": "AI配置更新成功",
+		"config":  config,
+	})
+}
+
+// TriggerBatchAIAnalysis 手动触发批量AI分析
+func (h *AdminHandler) TriggerBatchAIAnalysis(c *gin.Context) {
+	if !h.rssService.IsAIAnalysisEnabled() {
+		utils.BadRequest(c, "AI分析功能未启用")
+		return
+	}
+
+	go func() {
+		aiService := services.NewAIService(database.GetDB())
+		if err := aiService.BatchAnalyzeUnprocessedNews(); err != nil {
+			log.Printf("[ADMIN AI ERROR] 手动批量AI分析失败: %v", err)
+		} else {
+			log.Printf("[ADMIN AI] 手动批量AI分析完成")
+		}
+	}()
+
+	utils.Success(c, gin.H{
+		"message": "批量AI分析任务已启动",
+	})
+}
+
+// TriggerEventGeneration 手动触发事件生成
+func (h *AdminHandler) TriggerEventGeneration(c *gin.Context) {
+	if !h.rssService.IsEventGenerationEnabled() {
+		utils.BadRequest(c, "事件生成功能未启用")
+		return
+	}
+
+	go func() {
+		aiEventService := services.NewAIEventService()
+		if err := aiEventService.GenerateEventsFromNews(); err != nil {
+			log.Printf("[ADMIN AI ERROR] 手动事件生成失败: %v", err)
+		} else {
+			log.Printf("[ADMIN AI] 手动事件生成完成")
+		}
+	}()
+
+	utils.Success(c, gin.H{
+		"message": "事件生成任务已启动",
+	})
 }

@@ -517,7 +517,7 @@ func NewOpenAICompatibleProvider() *OpenAICompatibleProvider {
 func NewOpenAICompatibleProviderWithConfig(cfg *config.Config) *OpenAICompatibleProvider {
 	// 默认配置 - 修改为OpenRouter的默认配置
 	provider := &OpenAICompatibleProvider{
-		apiKey:      "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",
+		apiKey:      "",
 		baseURL:     "https://openrouter.ai/api/v1",
 		model:       "google/gemini-2.0-flash-001", // 使用稳定的thinking版本
 		siteURL:     "http://localhost:5173/",
