@@ -244,7 +244,7 @@ func SetupRoutes() *gin.Engine {
 			}
 
 			// RSS源管理
-			rssAdmin := admin.Group("/rss-sources")
+			rssAdmin := admin.Group("/rss")
 			{
 				rssAdmin.GET("", rssHandler.GetAllRSSSources)                          // 获取所有RSS源
 				rssAdmin.POST("", rssHandler.CreateRSSSource)                          // 创建RSS源
