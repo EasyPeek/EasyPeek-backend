@@ -88,8 +88,10 @@ func SetupRoutes() *gin.Engine {
 		news := v1.Group("/news")
 		{
 
+			// 支持可选认证的路由（个性化推荐需要用户信息）
+			news.GET("", middleware.OptionalAuthMiddleware(), newsHandler.GetAllNews) // 获取所有新闻列表（带个性化推荐）
+
 			// 公开路由 - 前端可以直接访问
-			news.GET("", newsHandler.GetAllNews)                           // 获取所有新闻列表（带分页）
 			news.GET("/hot", newsHandler.GetHotNews)                       // 获取热门新闻
 			news.GET("/latest", newsHandler.GetLatestNews)                 // 获取最新新闻
 			news.GET("/category/:category", newsHandler.GetNewsByCategory) // 按分类获取新闻
