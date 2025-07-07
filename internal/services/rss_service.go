@@ -380,19 +380,10 @@ func (s *RSSService) FetchAllRSSFeeds() (*models.RSSFetchResult, error) {
 		result.Message = fmt.Sprintf("Successfully fetched %d RSS sources", successCount)
 	}
 
-	// 在所有RSS抓取完成后，如果启用了事件生成，异步触发AI事件生成
+	// 在所有RSS抓取完成后，如果启用了事件生成，通过AI服务触发事件生成
 	if successCount > 0 && s.IsEventGenerationEnabled() {
-		go func() {
-			log.Printf("[RSS AI] RSS抓取完成，开始AI事件生成...")
-			// 延迟10秒开始事件生成，让AI分析先完成
-			time.Sleep(10 * time.Second)
-			aiEventService := NewAIEventService()
-			if err := aiEventService.GenerateEventsFromNews(); err != nil {
-				log.Printf("[RSS AI ERROR] AI事件生成失败: %v", err)
-			} else {
-				log.Printf("[RSS AI] AI事件生成完成")
-			}
-		}()
+		log.Printf("[RSS AI] RSS抓取完成，%d个源成功抓取，将由AI分析自动触发事件生成", successCount)
+		// 不需要手动触发，因为AI分析完成后会自动触发事件生成
 	}
 
 	return result, nil

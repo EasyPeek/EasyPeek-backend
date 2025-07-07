@@ -240,7 +240,7 @@ func DefaultAIEventConfig() *AIEventConfig {
 	config.EventGeneration.Enabled = true
 	config.EventGeneration.ConfidenceThreshold = 0.7 // 提高阈值确保聚类质量
 	config.EventGeneration.MinNewsCount = 3          // 至少3条新闻才生成事件
-	config.EventGeneration.TimeWindowHours = 72      // 扩展到72小时窗口
+	config.EventGeneration.TimeWindowHours = 168     // 扩展到一周时间窗口，处理更长时间范围的新闻
 
 	// 设置为0表示不限制数量，处理所有未关联的新闻
 	config.EventGeneration.MaxNewsLimit = 0
@@ -365,47 +365,37 @@ func (s *AIEventService) GenerateEventsFromNews() error {
 		return fmt.Errorf("database connection not initialized")
 	}
 
-	// 构建查询
-	query := s.db.Where("belonged_event_id IS NULL").Order("published_at DESC")
+	// 构建查询 - 处理所有新闻，不设置时间窗口限制
+	query := s.db.Order("published_at DESC")
 
 	// 如果MaxNewsLimit > 0，则应用限制；如果为0，则不限制
 	if s.config.EventGeneration.MaxNewsLimit > 0 {
 		query = query.Limit(s.config.EventGeneration.MaxNewsLimit)
 		log.Printf("限制处理新闻数量: %d", s.config.EventGeneration.MaxNewsLimit)
 	} else {
-		log.Println("处理所有未关联的新闻（无数量限制）")
+		log.Printf("处理所有新闻（无数量限制）")
 	}
 
 	var newsList []models.News
 	if err := query.Find(&newsList).Error; err != nil {
-		return fmt.Errorf("failed to fetch unassigned news: %w", err)
+		return fmt.Errorf("failed to fetch news: %w", err)
 	}
 
 	if len(newsList) == 0 {
-		log.Println("没有找到需要处理的新闻")
+		log.Printf("没有找到需要处理的新闻")
 		return nil
 	}
 
-	log.Printf("找到 %d 条未关联事件的新闻", len(newsList))
+	log.Printf("找到 %d 条新闻（包括已关联和未关联的）", len(newsList))
 
-	// 第一步：尝试将新闻关联到现有事件
-	remainingNews, linkedCount := s.tryLinkNewsToExistingEvents(newsList)
-	if linkedCount > 0 {
-		log.Printf("成功将 %d 条新闻关联到现有事件", linkedCount)
-	}
+	// 跳过关联到现有事件的步骤，直接按主题对所有新闻进行聚类
+	log.Println("开始处理所有新闻，包括已关联到事件的新闻")
 
-	if len(remainingNews) == 0 {
-		log.Println("所有新闻都已关联到现有事件，无需生成新事件")
-		return nil
-	}
-
-	log.Printf("剩余 %d 条新闻需要生成新事件", len(remainingNews))
-
-	// 第二步：按主题对新闻进行严格聚类
-	topicGroups := s.classifyNewsByTopic(remainingNews)
+	// 按主题对新闻进行严格聚类
+	topicGroups := s.classifyNewsByTopic(newsList)
 
 	// 第三步：为每个主题下的新闻按时间窗口分组，生成新事件
-	timeWindow := time.Duration(s.config.EventGeneration.TimeWindowHours) * time.Hour
+	// timeWindow已经在前面定义过了
 
 	generatedCount := 0
 	for topicName, topicNews := range topicGroups {
@@ -415,44 +405,40 @@ func (s *AIEventService) GenerateEventsFromNews() error {
 
 		log.Printf("处理主题: %s, 新闻数量: %d", topicName, len(topicNews))
 
-		// 按时间窗口进一步分组
-		timeGroups := s.groupNewsByTimeWindow(topicNews, timeWindow)
-
-		for i, timeGroup := range timeGroups {
-			if len(timeGroup) < s.config.EventGeneration.MinNewsCount {
-				log.Printf("主题 %s 时间组 %d 新闻数量不足 (%d < %d)，跳过",
-					topicName, i, len(timeGroup), s.config.EventGeneration.MinNewsCount)
-				continue
-			}
-
-			log.Printf("处理主题 %s 时间组 %d: 新闻数量: %d", topicName, i, len(timeGroup))
-
-			// 为每个分组生成事件
-			eventMapping, err := s.generateEventFromNewsGroup(timeGroup)
-			if err != nil {
-				log.Printf("为主题 %s 时间组 %d 生成事件失败: %v", topicName, i, err)
-				continue
-			}
-
-			if eventMapping == nil {
-				log.Printf("主题 %s 时间组 %d 不需要生成事件", topicName, i)
-				continue
-			}
-
-			// 设置事件分类为主题名称
-			eventMapping.EventData.Category = topicName
-
-			// 创建事件并关联新闻
-			if err := s.createEventAndLinkNews(eventMapping); err != nil {
-				log.Printf("创建事件并关联新闻失败: %v", err)
-				continue
-			}
-
-			generatedCount++
+		// 不再按时间窗口分组，直接处理整个主题的新闻
+		if len(topicNews) < s.config.EventGeneration.MinNewsCount {
+			log.Printf("主题 %s 新闻数量不足 (%d < %d)，跳过",
+				topicName, len(topicNews), s.config.EventGeneration.MinNewsCount)
+			continue
 		}
+
+		log.Printf("处理主题 %s: 新闻数量: %d", topicName, len(topicNews))
+
+		// 为主题内所有新闻生成一个事件
+		eventMapping, err := s.generateEventFromNewsGroup(topicNews)
+		if err != nil {
+			log.Printf("为主题 %s 生成事件失败: %v", topicName, err)
+			continue
+		}
+
+		if eventMapping == nil {
+			log.Printf("主题 %s 不需要生成事件", topicName)
+			continue
+		}
+
+		// 设置事件分类为主题名称
+		eventMapping.EventData.Category = topicName
+
+		// 创建事件并关联新闻
+		if err := s.createEventAndLinkNews(eventMapping); err != nil {
+			log.Printf("创建事件并关联新闻失败: %v", err)
+			continue
+		}
+
+		generatedCount++
 	}
 
-	log.Printf("事件处理完成！关联到现有事件: %d 条，生成新事件: %d 个", linkedCount, generatedCount)
+	log.Printf("事件处理完成！处理了 %d 条新闻，生成新事件: %d 个", len(newsList), generatedCount)
 	return nil
 }
 

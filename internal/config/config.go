@@ -21,6 +21,15 @@ func LoadConfig(filepath string) (*Config, error) {
 	// 指定配置文件
 	viper.SetConfigFile(filepath)
 
+	// 设置环境变量前缀
+	viper.SetEnvPrefix("OPENAI")
+	viper.AutomaticEnv()
+
+	// 绑定特定的环境变量
+	viper.BindEnv("ai.api_key", "OPENAI_API_KEY")
+	viper.BindEnv("ai.base_url", "OPENAI_BASE_URL")
+	viper.BindEnv("ai.model", "OPENAI_MODEL")
+
 	// 从文件读取配置
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, err
@@ -30,6 +39,17 @@ func LoadConfig(filepath string) (*Config, error) {
 	var cfg Config
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, err
+	}
+
+	// 环境变量覆盖文件配置
+	if apiKey := viper.GetString("ai.api_key"); apiKey != "" {
+		cfg.AI.APIKey = apiKey
+	}
+	if baseURL := viper.GetString("ai.base_url"); baseURL != "" {
+		cfg.AI.BaseURL = baseURL
+	}
+	if model := viper.GetString("ai.model"); model != "" {
+		cfg.AI.Model = model
 	}
 
 	AppConfig = &cfg

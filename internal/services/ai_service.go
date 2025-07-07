@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -36,25 +37,30 @@ type EventAnalysisResult struct {
 
 // AIService AI服务
 type AIService struct {
-	db       *gorm.DB
-	provider AIProvider
+	db               *gorm.DB
+	provider         AIProvider
+	eventService     *AIEventService // 添加AI事件服务依赖
+	lastEventGenTime time.Time       // 上次事件生成时间
 }
 
 // NewAIService 创建AI服务实例
 func NewAIService(db *gorm.DB) *AIService {
 	provider := NewOpenAICompatibleProvider()
 	return &AIService{
-		db:       db,
-		provider: provider,
+		db:           db,
+		provider:     provider,
+		eventService: NewAIEventService(),
 	}
 }
 
 // NewAIServiceWithConfig 使用指定配置创建AI服务实例
 func NewAIServiceWithConfig(db *gorm.DB, cfg *config.Config) *AIService {
 	provider := NewOpenAICompatibleProviderWithConfig(cfg)
+	eventService := NewAIEventServiceWithConfig(DefaultAIEventConfig())
 	return &AIService{
-		db:       db,
-		provider: provider,
+		db:           db,
+		provider:     provider,
+		eventService: eventService,
 	}
 }
 
@@ -510,7 +516,40 @@ type OpenAICompatibleProvider struct {
 
 // NewOpenAICompatibleProvider 创建OpenAI兼容的提供商（使用全局配置）
 func NewOpenAICompatibleProvider() *OpenAICompatibleProvider {
-	return NewOpenAICompatibleProviderWithConfig(config.AppConfig)
+	// 从环境变量读取配置
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	baseURL := os.Getenv("OPENAI_BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://openrouter.ai/api/v1"
+	}
+	model := os.Getenv("OPENAI_MODEL")
+	if model == "" {
+		model = "google/gemini-2.0-flash-001"
+	}
+
+	provider := &OpenAICompatibleProvider{
+		apiKey:      apiKey,
+		baseURL:     baseURL,
+		model:       model,
+		siteURL:     "http://localhost:5173/",
+		siteName:    "EasyPeek",
+		maxTokens:   4000,
+		temperature: 0.7,
+		timeout:     30,
+	}
+
+	log.Printf("✅ AI Provider初始化完成 - BaseURL: %s, Model: %s", provider.baseURL, provider.model)
+	if len(apiKey) > 0 {
+		keyPreview := apiKey
+		if len(keyPreview) > 15 {
+			keyPreview = keyPreview[:15] + "..."
+		}
+		log.Printf("🔑 API Key已加载: %s (长度: %d)", keyPreview, len(apiKey))
+	} else {
+		log.Printf("❌ 警告: API Key未设置")
+	}
+
+	return provider
 }
 
 // NewOpenAICompatibleProviderWithConfig 使用指定配置创建OpenAI兼容的提供商
@@ -519,7 +558,7 @@ func NewOpenAICompatibleProviderWithConfig(cfg *config.Config) *OpenAICompatible
 	provider := &OpenAICompatibleProvider{
 		apiKey:      "",
 		baseURL:     "https://openrouter.ai/api/v1",
-		model:       "google/gemini-2.0-flash-001", // 使用稳定的thinking版本
+		model:       "google/gemini-2.5-flash-preview", // 使用稳定的thinking版本
 		siteURL:     "http://localhost:5173/",
 		siteName:    "EasyPeek",
 		maxTokens:   4000,
@@ -969,6 +1008,25 @@ func (s *AIService) BatchAnalyzeUnprocessedNews() error {
 	}
 
 	log.Printf("[AI BATCH] 批量分析完成: 成功 %d/%d", successCount, len(newsWithoutAnalysis))
+
+	// 批量分析完成后，统一触发事件生成（避免重复触发）
+	if successCount > 0 {
+		log.Printf("[AI BATCH] 批量分析完成，开始触发事件生成")
+
+		// 更新状态
+		s.lastEventGenTime = time.Now()
+
+		go func() {
+			// 异步执行事件生成，避免阻塞
+			time.Sleep(10 * time.Second) // 等待10秒让分析结果完全保存
+			if err := s.eventService.GenerateEventsFromNews(); err != nil {
+				log.Printf("[AI BATCH ERROR] 事件生成失败: %v", err)
+			} else {
+				log.Printf("[AI BATCH] ✅ 事件生成完成 - 本次批量分析了 %d 条新闻", successCount)
+			}
+		}()
+	}
+
 	return nil
 }
 
@@ -1004,9 +1062,30 @@ func (s *AIService) AnalyzeNewsWithRetry(newsID uint, maxRetries int) {
 			}
 		} else {
 			log.Printf("[AI DEBUG] AI分析成功: 新闻ID %d (尝试 %d/%d)", newsID, attempt, maxRetries)
+
+			// 不在此处触发事件生成，避免重复触发
+			// 事件生成统一在批量分析完成后处理
 			return
 		}
 	}
 
 	log.Printf("[AI ERROR] AI分析最终失败: 新闻ID %d, 已重试 %d 次", newsID, maxRetries)
+}
+
+// 注释：已移除 tryTriggerEventGeneration 方法
+// 避免重复触发事件生成，现在统一在批量分析完成后触发
+
+// TriggerEventGeneration 手动触发事件生成
+func (s *AIService) TriggerEventGeneration() error {
+	log.Printf("[AI MANUAL] 手动触发事件生成")
+
+	if s.eventService == nil {
+		return fmt.Errorf("AI事件服务未初始化")
+	}
+
+	// 更新时间戳
+	s.lastEventGenTime = time.Now()
+
+	// 同步执行（手动触发时）
+	return s.eventService.GenerateEventsFromNews()
 }

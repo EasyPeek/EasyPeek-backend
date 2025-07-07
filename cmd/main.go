@@ -52,6 +52,8 @@ func main() {
 		&models.CommentLike{},
 		&models.Message{},
 		&models.Follow{},
+		&models.NewsLike{},
+		&models.AIAnalysis{}, // 添加AI分析表
 	); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}

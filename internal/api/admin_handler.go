@@ -345,8 +345,9 @@ func (h *AdminHandler) TriggerEventGeneration(c *gin.Context) {
 	}
 
 	go func() {
-		aiEventService := services.NewAIEventService()
-		if err := aiEventService.GenerateEventsFromNews(); err != nil {
+		// 使用AI服务的新方法触发事件生成
+		aiService := services.NewAIService(database.GetDB())
+		if err := aiService.TriggerEventGeneration(); err != nil {
 			log.Printf("[ADMIN AI ERROR] 手动事件生成失败: %v", err)
 		} else {
 			log.Printf("[ADMIN AI] 手动事件生成完成")
