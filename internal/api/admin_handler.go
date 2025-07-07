@@ -1,8 +1,10 @@
 package api
 
 import (
+	"log"
 	"strconv"
 
+	"github.com/EasyPeek/EasyPeek-backend/internal/database"
 	"github.com/EasyPeek/EasyPeek-backend/internal/models"
 	"github.com/EasyPeek/EasyPeek-backend/internal/services"
 	"github.com/EasyPeek/EasyPeek-backend/internal/utils"
@@ -218,8 +220,28 @@ func (h *AdminHandler) UpdateEvent(c *gin.Context) {
 
 // DeleteEvent 删除事件（管理员）
 func (h *AdminHandler) DeleteEvent(c *gin.Context) {
+	log.Printf("[ADMIN] 管理员删除事件请求，URL: %s", c.Request.URL.Path)
+
 	eventHandler := NewEventHandler()
 	eventHandler.DeleteEvent(c)
+}
+
+// ClearAllEvents 清空所有事件（管理员）
+func (h *AdminHandler) ClearAllEvents(c *gin.Context) {
+	log.Printf("[ADMIN] 管理员清空所有事件请求")
+
+	deletedCount, err := h.adminService.ClearAllEvents()
+	if err != nil {
+		log.Printf("[ADMIN ERROR] 清空事件失败: %v", err)
+		utils.InternalServerError(c, "清空事件失败: "+err.Error())
+		return
+	}
+
+	log.Printf("[ADMIN SUCCESS] 成功清空 %d 个事件", deletedCount)
+	utils.Success(c, gin.H{
+		"message":       "清空事件成功",
+		"deleted_count": deletedCount,
+	})
 }
 
 // ===== 新闻管理 =====
@@ -280,4 +302,79 @@ func (h *AdminHandler) DeleteNews(c *gin.Context) {
 	// 复用现有的新闻删除逻辑
 	newsHandler := NewNewsHandler()
 	newsHandler.DeleteNews(c)
+}
+
+// ===== AI配置管理 =====
+
+// GetAIConfig 获取AI配置状态
+func (h *AdminHandler) GetAIConfig(c *gin.Context) {
+	config := h.rssService.GetAIConfig()
+	utils.Success(c, config)
+}
+
+// UpdateAIConfig 更新AI配置
+func (h *AdminHandler) UpdateAIConfig(c *gin.Context) {
+	var req struct {
+		AIAnalysisEnabled      bool `json:"ai_analysis_enabled"`
+		EventGenerationEnabled bool `json:"event_generation_enabled"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Invalid request data: "+err.Error())
+		return
+	}
+
+	// 更新配置
+	h.rssService.SetAIAnalysisEnabled(req.AIAnalysisEnabled)
+	h.rssService.SetEventGenerationEnabled(req.EventGenerationEnabled)
+
+	// 返回更新后的配置
+	config := h.rssService.GetAIConfig()
+	utils.Success(c, gin.H{
+		"message": "AI配置更新成功",
+		"config":  config,
+	})
+}
+
+// TriggerBatchAIAnalysis 手动触发批量AI分析
+func (h *AdminHandler) TriggerBatchAIAnalysis(c *gin.Context) {
+	if !h.rssService.IsAIAnalysisEnabled() {
+		utils.BadRequest(c, "AI分析功能未启用")
+		return
+	}
+
+	go func() {
+		aiService := services.NewAIService(database.GetDB())
+		if err := aiService.BatchAnalyzeUnprocessedNews(); err != nil {
+			log.Printf("[ADMIN AI ERROR] 手动批量AI分析失败: %v", err)
+		} else {
+			log.Printf("[ADMIN AI] 手动批量AI分析完成")
+		}
+	}()
+
+	utils.Success(c, gin.H{
+		"message": "批量AI分析任务已启动",
+	})
+}
+
+// TriggerEventGeneration 手动触发事件生成
+func (h *AdminHandler) TriggerEventGeneration(c *gin.Context) {
+	if !h.rssService.IsEventGenerationEnabled() {
+		utils.BadRequest(c, "事件生成功能未启用")
+		return
+	}
+
+	go func() {
+		// 使用AI服务的新方法触发事件生成
+		aiService := services.NewAIService(database.GetDB())
+		if err := aiService.TriggerEventGeneration(); err != nil {
+			log.Printf("[ADMIN AI ERROR] 手动事件生成失败: %v", err)
+		} else {
+			log.Printf("[ADMIN AI] 手动事件生成完成")
+		}
+	}()
+
+	utils.Success(c, gin.H{
+		"message": "事件生成任务已启动",
+	})
 }

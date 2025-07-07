@@ -88,8 +88,10 @@ func SetupRoutes() *gin.Engine {
 		news := v1.Group("/news")
 		{
 
+			// 支持可选认证的路由（个性化推荐需要用户信息）
+			news.GET("", middleware.OptionalAuthMiddleware(), newsHandler.GetAllNews) // 获取所有新闻列表（带个性化推荐）
+
 			// 公开路由 - 前端可以直接访问
-			news.GET("", newsHandler.GetAllNews)                           // 获取所有新闻列表（带分页）
 			news.GET("/hot", newsHandler.GetHotNews)                       // 获取热门新闻
 			news.GET("/latest", newsHandler.GetLatestNews)                 // 获取最新新闻
 			news.GET("/category/:category", newsHandler.GetNewsByCategory) // 按分类获取新闻
@@ -225,6 +227,7 @@ func SetupRoutes() *gin.Engine {
 				events.POST("", adminHandler.CreateEvent)       // 创建事件
 				events.PUT("/:id", adminHandler.UpdateEvent)    // 更新事件
 				events.DELETE("/:id", adminHandler.DeleteEvent) // 删除事件
+				events.DELETE("", adminHandler.ClearAllEvents)  // 清空所有事件
 			}
 
 			// 新闻管理
@@ -261,6 +264,15 @@ func SetupRoutes() *gin.Engine {
 			messageAdmin := admin.Group("/messages")
 			{
 				messageAdmin.POST("", messageHandler.CreateMessage) // 创建系统消息
+			}
+
+			// AI配置管理
+			aiAdmin := admin.Group("/ai-config")
+			{
+				aiAdmin.GET("", adminHandler.GetAIConfig)                             // 获取AI配置状态
+				aiAdmin.PUT("", adminHandler.UpdateAIConfig)                          // 更新AI配置
+				aiAdmin.POST("/batch-analyze", adminHandler.TriggerBatchAIAnalysis)   // 手动触发批量AI分析
+				aiAdmin.POST("/generate-events", adminHandler.TriggerEventGeneration) // 手动触发事件生成
 			}
 		}
 

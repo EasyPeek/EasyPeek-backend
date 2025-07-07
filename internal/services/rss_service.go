@@ -20,8 +20,11 @@ import (
 )
 
 type RSSService struct {
-	db     *gorm.DB
-	parser *gofeed.Parser
+	db                    *gorm.DB
+	parser                *gofeed.Parser
+	aiService             *AIService
+	enableAIAnalysis      bool
+	enableEventGeneration bool
 }
 
 // NewsListResponse 新闻列表响应结构
@@ -58,9 +61,13 @@ func NewRSSService() *RSSService {
 	parser.Client = client
 	parser.UserAgent = "EasyPeek/1.0 RSS Reader (Mozilla/5.0 compatible)"
 
+	db := database.GetDB()
 	return &RSSService{
-		db:     database.GetDB(),
-		parser: parser,
+		db:                    db,
+		parser:                parser,
+		aiService:             NewAIService(db),
+		enableAIAnalysis:      true, // 默认启用AI分析
+		enableEventGeneration: true, // 默认启用事件生成
 	}
 }
 
@@ -280,6 +287,20 @@ func (s *RSSService) FetchRSSFeed(sourceID uint) (*models.RSSFetchStats, error) 
 	log.Printf("[RSS DEBUG] RSS fetch completed for %s: %d new, %d updated, %d errors in %s",
 		source.Name, stats.NewItems, stats.UpdatedItems, stats.ErrorItems, stats.Duration)
 
+	// 如果有新的新闻条目且启用了AI分析，异步触发批量AI分析
+	if stats.NewItems > 0 && s.IsAIAnalysisEnabled() {
+		go func() {
+			log.Printf("[RSS AI] RSS源 %s 抓取到 %d 条新闻，开始批量AI分析...", source.Name, stats.NewItems)
+			// 延迟5秒开始分析，让数据库事务完成
+			time.Sleep(5 * time.Second)
+			if err := s.aiService.BatchAnalyzeUnprocessedNews(); err != nil {
+				log.Printf("[RSS AI ERROR] 批量AI分析失败: %v", err)
+			} else {
+				log.Printf("[RSS AI] RSS源 %s 的新闻批量AI分析完成", source.Name)
+			}
+		}()
+	}
+
 	return stats, nil
 }
 
@@ -357,6 +378,12 @@ func (s *RSSService) FetchAllRSSFeeds() (*models.RSSFetchResult, error) {
 		result.Message = fmt.Sprintf("Partially successful: %d/%d sources fetched", successCount, len(sources))
 	} else {
 		result.Message = fmt.Sprintf("Successfully fetched %d RSS sources", successCount)
+	}
+
+	// 在所有RSS抓取完成后，如果启用了事件生成，通过AI服务触发事件生成
+	if successCount > 0 && s.IsEventGenerationEnabled() {
+		log.Printf("[RSS AI] RSS抓取完成，%d个源成功抓取，将由AI分析自动触发事件生成", successCount)
+		// 不需要手动触发，因为AI分析完成后会自动触发事件生成
 	}
 
 	return result, nil
@@ -618,6 +645,15 @@ func (s *RSSService) processNewsItem(source *models.RSSSource, item *gofeed.Item
 
 	// 新闻数据保存完成
 	log.Printf("[RSS DEBUG] 新闻已保存到数据库，ID: %d", newsItem.ID)
+
+	// 如果是新创建的新闻且启用了AI分析，异步触发AI分析
+	if isNew && s.IsAIAnalysisEnabled() {
+		go func() {
+			log.Printf("[RSS AI] 开始对新闻 ID: %d 进行AI分析", newsItem.ID)
+			// 使用带重试机制的AI分析，最多重试2次
+			s.aiService.AnalyzeNewsWithRetry(newsItem.ID, 2)
+		}()
+	}
 
 	return &newsItem, isNew, nil
 }
@@ -919,3 +955,33 @@ func (s *RSSService) GetRSSStats() (*RSSStats, error) {
 	return stats, nil
 }
 
+// SetAIAnalysisEnabled 设置是否启用AI分析
+func (s *RSSService) SetAIAnalysisEnabled(enabled bool) {
+	s.enableAIAnalysis = enabled
+	log.Printf("[RSS CONFIG] AI分析功能已%s", map[bool]string{true: "启用", false: "禁用"}[enabled])
+}
+
+// SetEventGenerationEnabled 设置是否启用事件生成
+func (s *RSSService) SetEventGenerationEnabled(enabled bool) {
+	s.enableEventGeneration = enabled
+	log.Printf("[RSS CONFIG] 事件生成功能已%s", map[bool]string{true: "启用", false: "禁用"}[enabled])
+}
+
+// IsAIAnalysisEnabled 检查AI分析是否启用
+func (s *RSSService) IsAIAnalysisEnabled() bool {
+	return s.enableAIAnalysis && s.aiService != nil
+}
+
+// IsEventGenerationEnabled 检查事件生成是否启用
+func (s *RSSService) IsEventGenerationEnabled() bool {
+	return s.enableEventGeneration
+}
+
+// GetAIConfig 获取AI配置状态
+func (s *RSSService) GetAIConfig() map[string]interface{} {
+	return map[string]interface{}{
+		"ai_analysis_enabled":      s.enableAIAnalysis,
+		"event_generation_enabled": s.enableEventGeneration,
+		"ai_service_available":     s.aiService != nil,
+	}
+}

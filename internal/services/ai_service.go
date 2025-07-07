@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -36,25 +37,30 @@ type EventAnalysisResult struct {
 
 // AIService AI服务
 type AIService struct {
-	db       *gorm.DB
-	provider AIProvider
+	db               *gorm.DB
+	provider         AIProvider
+	eventService     *AIEventService // 添加AI事件服务依赖
+	adminService     *AdminService   // 添加管理员服务依赖，用于清空事件
+	lastEventGenTime time.Time       // 上次事件生成时间
 }
 
 // NewAIService 创建AI服务实例
 func NewAIService(db *gorm.DB) *AIService {
-	provider := NewOpenAICompatibleProvider()
 	return &AIService{
-		db:       db,
-		provider: provider,
+		db:           db,
+		provider:     NewOpenAICompatibleProvider(),
+		eventService: NewAIEventService(),
+		adminService: NewAdminService(), // 添加管理员服务依赖
 	}
 }
 
 // NewAIServiceWithConfig 使用指定配置创建AI服务实例
 func NewAIServiceWithConfig(db *gorm.DB, cfg *config.Config) *AIService {
-	provider := NewOpenAICompatibleProviderWithConfig(cfg)
 	return &AIService{
-		db:       db,
-		provider: provider,
+		db:           db,
+		provider:     NewOpenAICompatibleProviderWithConfig(cfg),
+		eventService: NewAIEventServiceWithConfig(DefaultAIEventConfig()),
+		adminService: NewAdminService(), // 添加管理员服务依赖
 	}
 }
 
@@ -162,7 +168,6 @@ func (s *AIService) AnalyzeNews(newsID uint, options models.AIAnalysisRequest) (
 		var relatedNews []models.News
 		s.db.Where("category = ? AND id != ?", news.Category, news.ID).
 			Order("published_at DESC").
-			Limit(10).
 			Find(&relatedNews)
 
 		context := s.buildContext(relatedNews)
@@ -199,7 +204,6 @@ func (s *AIService) AnalyzeNews(newsID uint, options models.AIAnalysisRequest) (
 		var historicalNews []models.News
 		s.db.Where("category = ?", news.Category).
 			Order("published_at DESC").
-			Limit(20).
 			Find(&historicalNews)
 
 		predictions, err := s.provider.PredictTrends(content, historicalNews)
@@ -510,16 +514,49 @@ type OpenAICompatibleProvider struct {
 
 // NewOpenAICompatibleProvider 创建OpenAI兼容的提供商（使用全局配置）
 func NewOpenAICompatibleProvider() *OpenAICompatibleProvider {
-	return NewOpenAICompatibleProviderWithConfig(config.AppConfig)
+	// 从环境变量读取配置
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	baseURL := os.Getenv("OPENAI_BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://openrouter.ai/api/v1"
+	}
+	model := os.Getenv("OPENAI_MODEL")
+	if model == "" {
+		model = "google/gemini-2.0-flash-001"
+	}
+
+	provider := &OpenAICompatibleProvider{
+		apiKey:      apiKey,
+		baseURL:     baseURL,
+		model:       model,
+		siteURL:     "http://localhost:5173/",
+		siteName:    "EasyPeek",
+		maxTokens:   4000,
+		temperature: 0.7,
+		timeout:     30,
+	}
+
+	log.Printf("✅ AI Provider初始化完成 - BaseURL: %s, Model: %s", provider.baseURL, provider.model)
+	if len(apiKey) > 0 {
+		keyPreview := apiKey
+		if len(keyPreview) > 15 {
+			keyPreview = keyPreview[:15] + "..."
+		}
+		log.Printf("🔑 API Key已加载: %s (长度: %d)", keyPreview, len(apiKey))
+	} else {
+		log.Printf("❌ 警告: API Key未设置")
+	}
+
+	return provider
 }
 
 // NewOpenAICompatibleProviderWithConfig 使用指定配置创建OpenAI兼容的提供商
 func NewOpenAICompatibleProviderWithConfig(cfg *config.Config) *OpenAICompatibleProvider {
 	// 默认配置 - 修改为OpenRouter的默认配置
 	provider := &OpenAICompatibleProvider{
-		apiKey:      "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",
+		apiKey:      "",
 		baseURL:     "https://openrouter.ai/api/v1",
-		model:       "google/gemini-2.0-flash-001", // 使用稳定的thinking版本
+		model:       "google/gemini-2.5-flash-preview", // 使用稳定的thinking版本
 		siteURL:     "http://localhost:5173/",
 		siteName:    "EasyPeek",
 		maxTokens:   4000,
@@ -906,7 +943,76 @@ func (p *OpenAICompatibleProvider) callAPI(prompt string) (string, error) {
 	return "", fmt.Errorf("no response from API")
 }
 
-// BatchAnalyzeUnprocessedNews 批量分析未处理的新闻
+// InitializationCheck 系统初始化时的被动检查
+// 检查是否有新事件需要AI分析，如果没有则清空现有事件并重新生成（仅在初始化时执行一次）
+func (s *AIService) InitializationCheck() error {
+	log.Printf("[AI INIT] 🚀 系统初始化检查开始...")
+
+	// 检查是否有未分析的新闻
+	var unanalyzedCount int64
+	subQuery := s.db.Table("ai_analyses").
+		Select("target_id").
+		Where("type = ? AND status = ?", models.AIAnalysisTypeNews, "completed")
+
+	err := s.db.Model(&models.News{}).
+		Where("source_type = ? AND id NOT IN (?)", models.NewsTypeRSS, subQuery).
+		Count(&unanalyzedCount).Error
+
+	if err != nil {
+		log.Printf("[AI INIT ERROR] 查询未分析新闻数量失败: %v", err)
+		return err
+	}
+
+	log.Printf("[AI INIT] 发现 %d 条未分析的新闻", unanalyzedCount)
+
+	// 如果没有未分析的新闻，执行清空和重新生成逻辑
+	if unanalyzedCount == 0 {
+		log.Printf("[AI INIT] 没有新事件需要AI分析，检查是否需要重新生成事件...")
+
+		// 检查现有事件数量
+		var existingEventCount int64
+		if err := s.db.Model(&models.Event{}).Count(&existingEventCount).Error; err != nil {
+			log.Printf("[AI INIT ERROR] 查询现有事件数量失败: %v", err)
+			return err
+		}
+
+		if existingEventCount > 0 {
+			log.Printf("[AI INIT] 发现 %d 个现有事件，执行清空并重新生成流程", existingEventCount)
+
+			// 清空所有现有事件
+			deletedCount, err := s.adminService.ClearAllEvents()
+			if err != nil {
+				log.Printf("[AI INIT ERROR] 清空现有事件失败: %v", err)
+				return err
+			}
+			log.Printf("[AI INIT] ✅ 成功清空 %d 个现有事件", deletedCount)
+
+			// 重新生成事件
+			if err := s.eventService.GenerateEventsFromNews(); err != nil {
+				log.Printf("[AI INIT ERROR] 重新生成事件失败: %v", err)
+				return err
+			}
+			log.Printf("[AI INIT] ✅ 事件重新生成完成")
+
+		} else {
+			log.Printf("[AI INIT] 没有现有事件，尝试直接生成事件")
+
+			// 即使没有现有事件，也尝试从现有新闻生成事件
+			if err := s.eventService.GenerateEventsFromNews(); err != nil {
+				log.Printf("[AI INIT ERROR] 生成事件失败: %v", err)
+				return err
+			}
+			log.Printf("[AI INIT] ✅ 初始事件生成完成")
+		}
+	} else {
+		log.Printf("[AI INIT] 有 %d 条新闻需要分析，跳过初始化重新生成逻辑", unanalyzedCount)
+	}
+
+	log.Printf("[AI INIT] 🎉 系统初始化检查完成")
+	return nil
+}
+
+// BatchAnalyzeUnprocessedNews 批量分析未处理的新闻（保留给RSS服务使用）
 func (s *AIService) BatchAnalyzeUnprocessedNews() error {
 	log.Printf("[AI BATCH] 开始批量分析未处理的新闻...")
 
@@ -918,7 +1024,6 @@ func (s *AIService) BatchAnalyzeUnprocessedNews() error {
 
 	err := s.db.Where("source_type = ? AND id NOT IN (?)", models.NewsTypeRSS, subQuery).
 		Order("created_at DESC").
-		Limit(50). // 每次处理50条，避免负载过高
 		Find(&newsWithoutAnalysis).Error
 
 	if err != nil {
@@ -931,7 +1036,7 @@ func (s *AIService) BatchAnalyzeUnprocessedNews() error {
 		return nil
 	}
 
-	log.Printf("[AI BATCH] 找到 %d 条需要分析的新闻", len(newsWithoutAnalysis))
+	log.Printf("[AI BATCH] 找到 %d 条需要分析的新闻，开始分析流程", len(newsWithoutAnalysis))
 
 	successCount := 0
 	for i, news := range newsWithoutAnalysis {
@@ -969,10 +1074,29 @@ func (s *AIService) BatchAnalyzeUnprocessedNews() error {
 	}
 
 	log.Printf("[AI BATCH] 批量分析完成: 成功 %d/%d", successCount, len(newsWithoutAnalysis))
+
+	// 批量分析完成后，统一触发事件生成（避免重复触发）
+	if successCount > 0 {
+		log.Printf("[AI BATCH] 批量分析完成，开始触发事件生成")
+
+		// 更新状态
+		s.lastEventGenTime = time.Now()
+
+		go func() {
+			// 异步执行事件生成，避免阻塞
+			time.Sleep(10 * time.Second) // 等待10秒让分析结果完全保存
+			if err := s.eventService.GenerateEventsFromNews(); err != nil {
+				log.Printf("[AI BATCH ERROR] 事件生成失败: %v", err)
+			} else {
+				log.Printf("[AI BATCH] ✅ 事件生成完成 - 本次批量分析了 %d 条新闻", successCount)
+			}
+		}()
+	}
+
 	return nil
 }
 
-// AnalyzeNewsWithRetry 带重试机制的新闻AI分析
+// AnalyzeNewsWithRetry 带重试机制的新闻AI分析（RSS服务专用）
 func (s *AIService) AnalyzeNewsWithRetry(newsID uint, maxRetries int) {
 	analysisReq := models.AIAnalysisRequest{
 		Type:     models.AIAnalysisTypeNews,
@@ -1009,4 +1133,19 @@ func (s *AIService) AnalyzeNewsWithRetry(newsID uint, maxRetries int) {
 	}
 
 	log.Printf("[AI ERROR] AI分析最终失败: 新闻ID %d, 已重试 %d 次", newsID, maxRetries)
+}
+
+// TriggerEventGeneration 手动触发事件生成（管理员专用）
+func (s *AIService) TriggerEventGeneration() error {
+	log.Printf("[AI MANUAL] 手动触发事件生成")
+
+	if s.eventService == nil {
+		return fmt.Errorf("AI事件服务未初始化")
+	}
+
+	// 更新时间戳
+	s.lastEventGenTime = time.Now()
+
+	// 同步执行（手动触发时）
+	return s.eventService.GenerateEventsFromNews()
 }

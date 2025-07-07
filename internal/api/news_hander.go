@@ -106,8 +106,42 @@ func (h *NewsHandler) GetAllNews(c *gin.Context) {
 		}
 	}
 
-	// 调用 NewsService 的 GetAllNews 方法获取新闻列表和总数
-	newsList, total, err := h.newsService.GetAllNews(page, size)
+	// 获取推荐模式和其他参数
+	mode := c.DefaultQuery("sort", "normal") // normal, personalized, hot
+	category := c.Query("category")
+
+	var newsList []models.News
+	var total int64
+
+	// 根据推荐模式处理
+	if mode == "personalized" {
+		// 尝试获取用户ID（如果用户已登录）
+		userID := uint(0)
+		if userIDValue, exists := c.Get("user_id"); exists {
+			if uid, ok := userIDValue.(uint); ok {
+				userID = uid
+			}
+		}
+
+		// 构建过滤器
+		filters := make(map[string]interface{})
+		if category != "" {
+			filters["category"] = category
+		}
+
+		// 调用个性化推荐服务
+		newsList, total, err = h.newsService.GetNewsWithPreferences(userID, "personalized", page, size, filters)
+	} else if mode == "hot" {
+		// 热门推荐
+		newsList, err = h.newsService.GetHotNews(size)
+		if err == nil {
+			total = int64(len(newsList))
+		}
+	} else {
+		// 默认模式：获取所有新闻
+		newsList, total, err = h.newsService.GetAllNews(page, size)
+	}
+
 	if err != nil {
 		utils.InternalServerError(c, err.Error()) // 数据库或其他内部错误
 		return
@@ -191,6 +225,9 @@ func (h *NewsHandler) SearchNews(c *gin.Context) {
 		return
 	}
 
+	// 获取搜索模式参数
+	searchMode := c.DefaultQuery("mode", "normal") // normal, semantic, keywords
+
 	// 获取查询参数中的页码和每页大小，并设置默认值
 	pageStr := c.DefaultQuery("page", "1")
 	sizeStr := c.DefaultQuery("size", "10")
@@ -205,8 +242,8 @@ func (h *NewsHandler) SearchNews(c *gin.Context) {
 		size = 10
 	}
 
-	// 调用 NewsService 的 SearchNews 方法进行搜索
-	newsList, total, err := h.newsService.SearchNews(queryStr, page, size)
+	// 调用 NewsService 的增强搜索方法进行搜索
+	newsList, total, err := h.newsService.SearchNewsWithMode(queryStr, searchMode, page, size)
 	if err != nil {
 		utils.InternalServerError(c, err.Error()) // 数据库或其他内部错误
 		return

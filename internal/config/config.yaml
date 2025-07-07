@@ -29,23 +29,22 @@ admin:
   username: "admin" 
   password: "admin123456" # 请在生产环境中更改默认密码
 
-# AI服务配置
+# AI 配置
 ai:
   provider: "openrouter"
-  api_key: "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" # 请替换为有效的OpenRouter API Key
+  api_key: ""  # 将从环境变量OPENAI_API_KEY读取
   base_url: "https://openrouter.ai/api/v1"
-  model: "google/gemini-2.0-flash-001" # 使用更稳定的thinking版本
-  timeout: 30 
-  max_tokens: 4000 # 增加token限制以获得更完整的响应
+  model: "google/gemini-2.5-flash-preview"
+  timeout: 30
+  max_tokens: 4000
   temperature: 0.7
-  # OpenRouter特有配置
-  site_url: "http://localhost:5173/" # 你的网站URL（OpenRouter需要）
-  site_name: "EasyPeek" # 你的应用名称（OpenRouter需要）
-  # 自动分析配置
+  site_url: "http://localhost:5173/"
+  site_name: "EasyPeek"
   auto_analysis:
-    enabled: true # 是否启用自动AI分析
-    analyze_on_fetch: true # 在RSS抓取时即时分析
-    batch_process_interval: 15 # 批处理未分析新闻的间隔（分钟）- 增加间隔避免速率限制
-    max_batch_size: 5 # 每次批处理的最大新闻数量 - 减少数量避免速率限制
-    analysis_delay: 3 # 每个分析之间的延迟（秒）- 增加延迟避免速率限制
+    enabled: true
+    analyze_on_fetch: true
+    batch_process_interval: 15  # 分钟
+    max_batch_size: 50
+    analysis_delay: 5  # 秒
+
 

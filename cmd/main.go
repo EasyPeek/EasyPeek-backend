@@ -52,6 +52,8 @@ func main() {
 		&models.CommentLike{},
 		&models.Message{},
 		&models.Follow{},
+		&models.NewsLike{},
+		&models.AIAnalysis{}, // 添加AI分析表
 	); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
@@ -109,6 +111,15 @@ func main() {
 	// 启动AI事件生成的goroutine
 	go func() {
 		log.Println("AI事件生成服务已启动，每30分钟执行一次")
+
+		// 🚀 系统启动时执行一次初始化检查（被动触发）
+		log.Println("执行系统初始化检查...")
+		aiService := services.NewAIService(database.GetDB())
+		if err := aiService.InitializationCheck(); err != nil {
+			log.Printf("系统初始化检查失败: %v", err)
+		} else {
+			log.Println("✅ 系统初始化检查完成")
+		}
 
 		// 立即执行一次事件生成（可选）
 		if aiEventService.IsEnabled() {
