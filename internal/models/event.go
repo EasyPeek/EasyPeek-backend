@@ -56,6 +56,7 @@ type EventResponse struct {
 	CommentCount int64     `json:"comment_count"`
 	ShareCount   int64     `json:"share_count"`
 	HotnessScore float64   `json:"hotness_score"`
+	NewsCount    int64     `json:"news_count"` // 关联的新闻数量
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }

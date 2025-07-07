@@ -94,7 +94,7 @@ func (s *EventService) GetEvents(query *models.EventQueryRequest) (*models.Event
 	// 构建响应
 	var eventResponses []models.EventResponse
 	for _, event := range events {
-		eventResponses = append(eventResponses, convertToEventResponse(&event))
+		eventResponses = append(eventResponses, s.convertToEventResponseWithNewsCount(&event))
 	}
 
 	return &models.EventListResponse{
@@ -113,7 +113,7 @@ func (s *EventService) GetEventByID(id uint) (*models.EventResponse, error) {
 		return nil, err
 	}
 
-	response := convertToEventResponse(&event)
+	response := s.convertToEventResponseWithNewsCount(&event)
 	return &response, nil
 }
 
@@ -147,7 +147,7 @@ func (s *EventService) ViewEvent(id uint) (*models.EventResponse, error) {
 		return nil, err
 	}
 
-	response := convertToEventResponse(&event)
+	response := s.convertToEventResponseWithNewsCount(&event)
 	return &response, nil
 }
 
@@ -182,7 +182,7 @@ func (s *EventService) CreateEvent(req *models.CreateEventRequest) (*models.Even
 		return nil, err
 	}
 
-	response := convertToEventResponse(&event)
+	response := s.convertToEventResponseWithNewsCount(&event)
 	return &response, nil
 }
 
@@ -247,7 +247,7 @@ func (s *EventService) UpdateEvent(id uint, req *models.UpdateEventRequest) (*mo
 		return nil, err
 	}
 
-	response := convertToEventResponse(&event)
+	response := s.convertToEventResponseWithNewsCount(&event)
 	return &response, nil
 }
 
@@ -279,7 +279,7 @@ func (s *EventService) GetEventsByStatus(status string) ([]models.EventResponse,
 	// 构建响应
 	var eventResponses []models.EventResponse
 	for _, event := range events {
-		eventResponses = append(eventResponses, convertToEventResponse(&event))
+		eventResponses = append(eventResponses, s.convertToEventResponseWithNewsCount(&event))
 	}
 
 	return eventResponses, nil
@@ -322,9 +322,24 @@ func convertToEventResponse(event *models.Event) models.EventResponse {
 		CommentCount: event.CommentCount,
 		ShareCount:   event.ShareCount,
 		HotnessScore: event.HotnessScore,
+		NewsCount:    0, // 将在调用方设置
 		CreatedAt:    event.CreatedAt,
 		UpdatedAt:    event.UpdatedAt,
 	}
+}
+
+// convertToEventResponseWithNewsCount 转换事件为响应格式并获取新闻数量
+func (s *EventService) convertToEventResponseWithNewsCount(event *models.Event) models.EventResponse {
+	response := convertToEventResponse(event)
+
+	// 查询关联的新闻数量
+	var newsCount int64
+	if err := s.db.Model(&models.News{}).Where("belonged_event_id = ?", event.ID).Count(&newsCount).Error; err != nil {
+		newsCount = 0 // 如果查询失败，默认为0
+	}
+	response.NewsCount = newsCount
+
+	return response
 }
 
 // GetHotEvents 获取热点事件
@@ -343,7 +358,7 @@ func (s *EventService) GetHotEvents(limit int) ([]models.EventResponse, error) {
 
 	var eventResponses []models.EventResponse
 	for _, event := range events {
-		eventResponses = append(eventResponses, convertToEventResponse(&event))
+		eventResponses = append(eventResponses, s.convertToEventResponseWithNewsCount(&event))
 	}
 
 	return eventResponses, nil
@@ -409,7 +424,7 @@ func (s *EventService) GetEventsByCategory(category string, query *models.EventQ
 
 	var eventResponses []models.EventResponse
 	for _, event := range events {
-		eventResponses = append(eventResponses, convertToEventResponse(&event))
+		eventResponses = append(eventResponses, s.convertToEventResponseWithNewsCount(&event))
 	}
 
 	return &models.EventListResponse{
